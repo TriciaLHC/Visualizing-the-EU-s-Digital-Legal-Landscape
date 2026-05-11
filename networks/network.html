@@ -378,7 +378,7 @@ canvas.hover{cursor:pointer}
   <div class="ctx-popup" id="ctxPopup">
     <div class="ctx-popup-head">
       <div class="ctx-meta">
-        <div style="font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Related Law</div>
+        <div id="ctxPopupType" style="font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Related Law</div>
         <h3 id="ctxPopupTitle">—</h3>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)" id="ctxPopupCelex">—</div>
       </div>
@@ -983,13 +983,15 @@ function trunc(s, n) { return s && s.length > n ? s.slice(0, n - 1) + '…' : (s
 
 // ================================================================
 // Interaction
+// Stored zoom reference so selectAndCenter can update D3's internal state correctly
+let ZOOM_BEHAVIOR = null;
+
 // ================================================================
 function wireEvents() {
-  // zoom + pan
-  d3.select(CV).call(
-    d3.zoom().scaleExtent([0.08, 5])
-      .on('zoom', ev => { TRANSFORM = ev.transform; draw(); })
-  );
+  // zoom + pan — save reference so selectAndCenter reuses it (avoids pan-snap bug)
+  ZOOM_BEHAVIOR = d3.zoom().scaleExtent([0.08, 5])
+    .on('zoom', ev => { TRANSFORM = ev.transform; draw(); });
+  d3.select(CV).call(ZOOM_BEHAVIOR);
 
   // drag
   d3.select(CV).call(d3.drag()
@@ -1057,6 +1059,7 @@ function wireEvents() {
       document.getElementById('fs-' + VIEW).classList.add('active');
       closePanel();
       SELECTED = null; HOVER = null;
+      QUERY_FOCUS_IDS = null; IMPLICIT_QUERY = ''; QUERY_BEST_CHUNKS = {};
       updateStats();
       buildView();
     });
@@ -1170,7 +1173,7 @@ async function doSemanticSearch(term) {
     });
     const d = await r.json();
     // Include all results that have a node in the current view (laws + cases)
-    const results = (d.results || []).filter(x => NODE_MAP[x.parent_id] || x.score >= SEMANTIC_THRESHOLD);
+    const results = (d.results || []).filter(x => NODE_MAP[x.parent_id]);
     QUERY_FOCUS_IDS = results.length ? new Set(results.map(x => x.parent_id)) : null;
 
     // Cache best chunk text per parent_id (used in Full Text tab when node is clicked)
@@ -1250,9 +1253,12 @@ function renderResults(containerId, pool, mode) {
   if (!pool.length) { out.innerHTML = '<div class="result-empty">no matches</div>'; return; }
   out.innerHTML = pool.map((n, i) => {
     const friendly = KNOWN_LAWS[n.id];
+    // Laws: friendly name (gold) → CELEX. Cases: friendly name → case number (label).
     const display  = friendly
       ? `<b style="color:var(--gold)">${esc(friendly)}</b>`
-      : esc(trunc(n.label || n.id, 34));
+      : n.is_case
+        ? esc(n.label || n.id)
+        : esc(n.id);
     const typeTag  = n.is_case || (mode === 'mixed' && n.subject_matter) ? 'CASE' : 'LAW';
     return `<div class="result-row" data-id="${esc(n.id)}">
        <span class="rn">${String(i + 1).padStart(2, '0')}</span>
@@ -1284,7 +1290,7 @@ function selectAndCenter(n) {
   const rect = CV.parentElement.getBoundingClientRect();
   const k    = Math.max(TRANSFORM.k, 1.2);
   TRANSFORM  = d3.zoomIdentity.translate(rect.width / 2 - n.x * k, rect.height / 2 - n.y * k).scale(k);
-  d3.select(CV).call(d3.zoom().transform, TRANSFORM);
+  if (ZOOM_BEHAVIOR) d3.select(CV).call(ZOOM_BEHAVIOR.transform, TRANSFORM);
   draw();
 }
 
@@ -1329,10 +1335,12 @@ function selectNode(n) {
       tagGroup('EuroVoc', n.eurovoc || []) +
       tagGroup('Directory', n.directory || []);
   } else {
+    // subject_matter may be a pipe-separated string (case nodes) or an array (law nodes)
+    const toArr = v => Array.isArray(v) ? v : (v ? String(v).split('|').map(s => s.trim()).filter(Boolean) : []);
     info.innerHTML = `
-      ${tagGroup('Subject Matter', n.subject_matter || [])}
-      ${tagGroup('EuroVoc', n.eurovoc || [])}
-      ${tagGroup('Directory', n.directory || [])}`;
+      ${tagGroup('Subject Matter', toArr(n.subject_matter))}
+      ${tagGroup('EuroVoc',        toArr(n.eurovoc))}
+      ${tagGroup('Directory',      toArr(n.directory))}`;
   }
 
   // Connections tab
@@ -1458,9 +1466,10 @@ function clearSemanticQuery() {
 // ================================================================
 function openRelatedPopup(othNode, fromId) {
   const popup = document.getElementById('ctxPopup');
+  document.getElementById('ctxPopupType').textContent = othNode.is_case ? 'Related Case' : 'Related Law';
   document.getElementById('ctxPopupTitle').textContent =
-    KNOWN_LAWS[othNode.id] || othNode.name || othNode.label || othNode.id;
-  document.getElementById('ctxPopupCelex').textContent = othNode.id;
+    (othNode.is_case ? (othNode.case_name || othNode.name || othNode.label) : (KNOWN_LAWS[othNode.id] || othNode.name || othNode.label)) || othNode.id;
+  document.getElementById('ctxPopupCelex').textContent = (othNode.is_case && othNode.label !== othNode.id) ? othNode.label : othNode.id;
   const body = document.getElementById('ctxPopupBody');
   body.innerHTML = '<div class="empty-state"><div class="icon">[…]</div><p>Loading…</p></div>';
   popup.classList.add('open');
@@ -1529,32 +1538,6 @@ function highlightText(container, query) {
   });
 }
 
-function scrollToChunk(chunkText) {
-  if (!chunkText) return;
-  // First sentence of the chunk as anchor (up to 80 chars)
-  const anchor = chunkText.trim().slice(0, 80).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(anchor.slice(0, 40), 'i');
-
-  // Poll until the md-body is rendered (fulltext loads async)
-  let attempts = 0;
-  const check = () => {
-    const ftEl = document.querySelector('#tab-fulltext .md-body');
-    if (!ftEl) {
-      if (++attempts < 30) setTimeout(check, 200);
-      return;
-    }
-    const walker = document.createTreeWalker(ftEl, NodeFilter.SHOW_TEXT);
-    let found = null;
-    while (walker.nextNode()) {
-      if (re.test(walker.currentNode.textContent)) { found = walker.currentNode; break; }
-    }
-    if (!found) return;
-    const el = found.parentElement;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.style.background = '#ffe066';  // yellow highlight — stays until user navigates away
-  };
-  check();
-}
 </script>
 </body>
 </html>

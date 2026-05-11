@@ -189,7 +189,10 @@ def load_data(threshold: float):
             if _val and _val != "nan":
                 _lut.setdefault(_val, cleaned)
     print(f"  {len(_law_lookup):,} laws  |  {len(_case_lookup):,} cases (ECLI)  |  {len(_case_num_lookup):,} cases (CELEX/number) in lookup.")
-    _build_implicit_network()
+    try:
+        _build_implicit_network()
+    except Exception as _e:
+        print(f"[WARNING] implicit network build failed — server still starts: {_e}")
     print(f"\nReady — threshold={threshold}  top_n={TOP_N}")
 
 
@@ -418,7 +421,7 @@ def serve_explicit_json():
 @app.route("/api/implicit_network")
 def api_implicit_network():
     threshold = float(request.args.get("threshold", 0.5))
-    threshold = max(0.5, min(1.0, threshold))
+    threshold = max(0.3, min(1.0, threshold))
     law_edges  = [p for p in _implicit_pairs      if p["score"] >= threshold]
     case_edges = [p for p in _implicit_case_pairs if p["score"] >= threshold]
     return jsonify({
