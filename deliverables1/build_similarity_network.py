@@ -270,8 +270,9 @@ def detect_communities(edges: list[dict], n_nodes: int) -> list[int]:
 # -------------------------------------------------------------------- #
 
 def main() -> None:
-    DATA = Path("C:/ADS MASTER/THESIS PROJECT/Data")
-    DELIVERABLES = Path("C:/ADS MASTER/THESIS PROJECT/deliverables")
+    ROOT        = Path(__file__).resolve().parent.parent
+    DATA        = ROOT / "Data"
+    DELIVERABLES = ROOT / "deliverables"
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--laws", type=Path,

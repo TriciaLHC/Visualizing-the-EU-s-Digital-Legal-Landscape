@@ -11,7 +11,7 @@ Strategy (runs in ~10–30 seconds):
   3. Cases placed on an outer ring (they only appear in View 2 anyway).
 
 Run after build_explicit_network.py:
-    cd "C:/ADS MASTER/THESIS PROJECT/deliverables"
+    cd <repo-root>/deliverables
     python build_layout.py
 
 Output: explicit_network_layout.json

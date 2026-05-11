@@ -338,8 +338,9 @@ def build_case_law_edges(cases_df: pd.DataFrame, valid_laws: set[str]) -> list[d
 # -------------------------------------------------------------------- #
 
 def main() -> None:
-    DATA        = Path("C:/ADS MASTER/THESIS PROJECT/Data")
-    DELIVERABLES = Path("C:/ADS MASTER/THESIS PROJECT/deliverables")
+    ROOT        = Path(__file__).resolve().parent.parent
+    DATA        = ROOT / "Data"
+    DELIVERABLES = ROOT / "deliverables"
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--laws",   type=Path, default=DATA / "laws.csv")
