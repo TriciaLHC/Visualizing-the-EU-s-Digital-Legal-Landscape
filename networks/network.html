@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,700;9..144,900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <style>
 :root{
   --ink:#14181f; --sidebar:#1a1f2e; --sidebar-2:#222838; --sidebar-rule:#2a3142;
@@ -61,8 +62,8 @@ hr.gold{border:0;height:2px;background:linear-gradient(90deg,var(--gold) 0,var(-
 .control label{display:flex;justify-content:space-between;font-size:11px;color:#a8aebd;letter-spacing:.04em;margin-bottom:5px}
 .control label b{font-family:'IBM Plex Mono',monospace;color:var(--gold)}
 .control input[type=range]{-webkit-appearance:none;width:100%;background:transparent;cursor:pointer}
-.control input[type=range]::-webkit-slider-runnable-track{background:#2a3142;height:3px;border-radius:2px}
-.control input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+.control input[type=range]::-webkit-slider-runnable-track{background:#2a3142;height:6px;border-radius:3px}
+.control input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
   background:var(--gold);border-radius:50%;margin-top:-4.5px;border:2px solid #11151f}
 
 .search{position:relative;margin-bottom:8px}
@@ -72,7 +73,10 @@ hr.gold{border:0;height:2px;background:linear-gradient(90deg,var(--gold) 0,var(-
 .search input:focus{border-color:var(--gold)}
 .search svg{position:absolute;left:9px;top:9px;opacity:.5}
 
-.results{max-height:200px;overflow-y:auto;margin:0 -20px;padding:0 20px}
+.results{max-height:200px;overflow-y:auto;margin:0 -20px;padding:0 20px;background:var(--sidebar)}
+.results::-webkit-scrollbar{width:8px}
+.results::-webkit-scrollbar-track{background:var(--sidebar)}
+.results::-webkit-scrollbar-thumb{background:var(--sidebar-rule);border-radius:4px}
 .result-row{font-size:12px;color:#cfd3dd;padding:6px 0;border-bottom:1px solid #232a3b;
   cursor:pointer;display:flex;align-items:baseline;gap:8px}
 .result-row:hover{color:var(--gold)}
@@ -168,6 +172,63 @@ canvas.hover{cursor:pointer}
   border-top-color:var(--gold);animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .fail{color:#a02922;font-family:'IBM Plex Mono',monospace;font-size:12.5px;max-width:56ch;text-align:center;line-height:1.6}
+
+/* ---- markdown body (full text tab) ---- */
+.md-body{font-size:13px;color:#2a2e38;line-height:1.7;font-family:Georgia,'Times New Roman',serif}
+.md-body h1{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:15px;color:var(--ink);text-align:center;margin:0 0 10px;line-height:1.3;letter-spacing:-.01em}
+.md-body h2{font-family:'IBM Plex Sans',sans-serif;font-weight:700;font-size:11.5px;color:var(--ink);text-transform:uppercase;letter-spacing:.1em;margin:18px 0 5px;padding-top:14px;border-top:1px solid var(--paper-rule)}
+.md-body h3,.md-body h4{font-family:'IBM Plex Sans',sans-serif;font-weight:700;font-size:11.5px;color:var(--ink);margin:12px 0 3px;text-transform:uppercase;letter-spacing:.06em}
+.md-body p{margin:0 0 8px;text-align:justify;hyphens:auto}
+.md-body ul,.md-body ol{padding-left:20px;margin:0 0 8px}
+.md-body li{margin-bottom:4px}
+.md-body strong{font-weight:700;color:var(--ink)}
+.md-body em{font-style:italic}
+.md-body a{color:var(--gold-2)}
+.md-body hr{border:0;border-top:1px solid var(--paper-rule);margin:16px 0}
+.md-body mark{background:#ffe066;border-radius:2px;padding:0 2px}
+.md-body blockquote{border-left:3px solid var(--gold-soft);margin:8px 0;padding:4px 10px;color:#555;font-style:italic}
+/* Full title shown in implicit info tab */
+.info-full-title{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:13px;color:var(--ink);line-height:1.4;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--paper-rule)}
+/* similarity bar in connections tab */
+.nb-bar{flex:none;width:80px;height:5px;background:#eee2c0;border-radius:3px;overflow:hidden}
+.nb-bar>div{height:100%;background:linear-gradient(90deg,var(--gold-2),var(--gold))}
+.nb-sc{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);min-width:38px;text-align:right}
+
+/* related-law popup */
+.ctx-popup{position:fixed;bottom:20px;right:20px;z-index:50;
+  width:500px;max-width:90vw;max-height:78vh;background:#fff;
+  border:1px solid var(--paper-rule);border-radius:8px;
+  box-shadow:0 16px 48px rgba(20,24,31,.22);display:flex;flex-direction:column;
+  transform:translateY(30px);opacity:0;pointer-events:none;
+  transition:transform .22s cubic-bezier(.4,0,.2,1),opacity .22s}
+.ctx-popup.open{transform:none;opacity:1;pointer-events:auto}
+.ctx-popup-head{padding:14px 18px 10px;border-bottom:1px solid var(--paper-rule);
+  background:linear-gradient(180deg,#fffbeb,#fff);flex:none;
+  display:flex;align-items:flex-start;gap:8px}
+.ctx-popup-head .ctx-meta{flex:1;min-width:0}
+.ctx-popup-head h3{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:16px;
+  margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctx-popup-body{flex:1;overflow-y:auto;padding:14px 20px 24px;background:#fff}
+.ctx-popup-body::-webkit-scrollbar{width:5px}
+.ctx-popup-body::-webkit-scrollbar-track{background:#fdf8ec}
+.ctx-popup-body::-webkit-scrollbar-thumb{background:var(--paper-rule);border-radius:3px}
+
+/* search hint */
+.search-hint{font-size:10.5px;color:#5d6477;margin:-4px 0 8px;font-family:'IBM Plex Mono',monospace;
+  letter-spacing:.03em}
+
+/* active-query chip (shown after pressing Enter in semantic search) */
+.query-chip{display:none;align-items:center;gap:6px;
+  background:#1e2538;border:1px solid var(--gold);
+  border-radius:20px;padding:5px 8px 5px 13px;
+  font-size:11.5px;color:var(--gold);margin:4px 0 6px;max-width:100%}
+.query-chip.active{display:inline-flex}
+.query-chip .qc-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;
+  font-family:'IBM Plex Mono',monospace}
+.query-chip .qc-x{background:transparent;border:none;cursor:pointer;flex:none;
+  color:#6b7080;font-size:17px;line-height:1;padding:0 2px;
+  border-radius:50%;transition:color .15s}
+.query-chip .qc-x:hover{color:var(--gold)}
 </style>
 </head>
 <body>
@@ -234,11 +295,38 @@ canvas.hover{cursor:pointer}
     <div class="results" id="res2"></div>
   </div>
 
-  <!-- VIEW 3: Implicit placeholder -->
+  <!-- VIEW 3: Implicit semantic relations -->
   <div class="filter-section" id="fs-implicit">
-    <div class="placeholder">
-      <div class="ph-icon">[∿]</div>
-      <div>Implicit relations view<br>reserved for semantic<br>similarity model.</div>
+    <div class="group-label">Semantic Query</div>
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9aa1b3" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q3-semantic" type="text" placeholder="e.g. AI transparency obligations…" autocomplete="off">
+    </div>
+    <div class="search-hint">↩ Enter → Find semantically similar laws and cases</div>
+    <div class="query-chip" id="queryChip">
+      <span class="qc-text" id="queryChipText"></span>
+      <button class="qc-x" onclick="clearSemanticQuery()" title="Clear search">×</button>
+    </div>
+    <div class="results" id="res3-semantic"></div>
+
+    <div class="group-label">Search</div>
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9aa1b3" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q3" type="text" placeholder="Law name or free-text query…" autocomplete="off">
+    </div>
+    <div class="results" id="res3"></div>
+
+    <div class="group-label">Connection Filter</div>
+    <div class="control">
+      <label>Similarity Score <b id="simLbl">0.90</b></label>
+      <input id="simSlider" type="range" min="0.5" max="0.99" step="0.01" value="0.90">
+    </div>
+
+    <div class="group-label">Legend</div>
+    <div style="font-size:11.5px;color:#a8aebd;line-height:1.8">
+      Node size ∝ connections<br>
+      Colour = EuroVoc group<br>
+      Edge opacity = similarity
     </div>
   </div>
 
@@ -270,10 +358,12 @@ canvas.hover{cursor:pointer}
     <div class="tabs">
       <button class="tab-btn active" data-tab="info">Info</button>
       <button class="tab-btn" data-tab="connections">Connections <span class="cnt" id="cConn"></span></button>
+      <button class="tab-btn" data-tab="fulltext">Full Text</button>
     </div>
     <div class="pbody">
       <section id="tab-info" class="active"></section>
       <section id="tab-connections"></section>
+      <section id="tab-fulltext"></section>
     </div>
   </div>
 
@@ -282,6 +372,19 @@ canvas.hover{cursor:pointer}
     <div class="lt">Loading network…</div>
     <div class="ls">explicit_network_data.json</div>
     <div id="loadFail" class="fail" style="display:none"></div>
+  </div>
+
+  <!-- Related-law context popup (implicit view connection click) -->
+  <div class="ctx-popup" id="ctxPopup">
+    <div class="ctx-popup-head">
+      <div class="ctx-meta">
+        <div style="font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Related Law</div>
+        <h3 id="ctxPopupTitle">—</h3>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)" id="ctxPopupCelex">—</div>
+      </div>
+      <button class="close-btn" style="position:static;margin-top:-4px" onclick="closePopup()">×</button>
+    </div>
+    <div class="ctx-popup-body" id="ctxPopupBody"></div>
   </div>
 </main>
 </div>
@@ -305,6 +408,22 @@ const EDGE_LABEL = {
   reasoning:'Reasoning', operative:'Operative',
 };
 const CITATION_TYPES = new Set(['amends','repeals','implicitly_repeals','implements','completes','corrects','body_citation']);
+
+// Friendly names for key EU digital laws (CELEX → short name)
+const KNOWN_LAWS = {
+  '32024R1689':'AI Act',    '32022L2557':'CER',        '32024L1385':'CGBVD',
+  '12007P':    'Charter',   '32024R2847':'CRA',        '32019R0881':'CSA',
+  '32025R0038':'CSoldAct',  '32014R0536':'CTR',        '32023R2854':'Data Act',
+  '32022R0868':'DGA',       '32022R1925':'DMA',        '32022R2554':'DORA',
+  '32022R2065':'DSA',       '32018L1972':'EECC',       '32025R0327':'EHDS',
+  '32024R1083':'EMFA',      '32002L0058':'ePD',        '32014R0910':'eIDAS',
+  '32018R1725':'EUDPR',     '32018R1807':'FFONPDR',    '32016R0679':'GDPR',
+  '32025R2518':'GDPREnforcement', '32024R0903':'IEA',  '32016L0680':'LED',
+  '32023R1230':'MachReg',   '32017R0745':'MDR',        '32019R1020':'MSR',
+  '32022L2555':'NIS2',      '32019L1024':'ODD',        '32024L2853':'PLD',
+  '32015L2366':'PSD2',      '32024L2831':'PWD',        '32025R2509':'TSR',
+  '32024R0900':'TTPAR',
+};
 
 // 20 group colours (index matches DATA.meta.groups order)
 const GROUP_COLORS = [
@@ -337,6 +456,14 @@ const FILTERS = {
   reasoning:true, operative:true,
 };
 let MIN_SHARED = 5;
+let IMPLICIT_NODES_CACHE = [];   // law nodes from /api/implicit_network (fetched once)
+let IMPLICIT_CASE_CACHE  = [];   // case nodes from /api/implicit_network
+let IMPLICIT_ALL_EDGES   = [];   // law-law edges ≥ 0.5 (fetched once, filtered locally)
+let IMPLICIT_CASE_EDGES  = [];   // case-law edges ≥ 0.5
+let IMPLICIT_META        = {};   // {n_laws, n_cases, n_edges} from last fetch
+let IMPLICIT_QUERY     = '';     // active search term for full-text highlighting
+let QUERY_FOCUS_IDS   = null;   // Set of parent_ids from semantic search (dims others)
+let QUERY_BEST_CHUNKS = {};     // {parent_id: best_chunk_text} from last semantic search
 
 // ================================================================
 // Load
@@ -381,7 +508,23 @@ function updateStats() {
     document.getElementById('kE').textContent = 'Case–Law Edges';
     document.getElementById('sX').textContent = fmt(m.n_cases);
     document.getElementById('kX').textContent = 'Cases';
+  } else if (VIEW === 'implicit') {
+    // sE/kE updated live in rebuildImplicitEdges; cases from cached meta
+    document.getElementById('sX').textContent = fmt(IMPLICIT_META.n_cases || 0);
+    document.getElementById('kX').textContent = 'Cases';
   }
+  updateHeader();
+}
+
+function updateHeader() {
+  const cfg = {
+    law:      { eye: 'EU Legal Corpus · Explicit Network',     title: 'Law &amp; Case <em>Connections</em>' },
+    case:     { eye: 'EU Legal Corpus · Case Network',         title: 'Law &amp; Case <em>Connections</em>' },
+    implicit: { eye: 'EU Legal Corpus · Semantic Similarity',  title: 'Implicit <em>Relations</em>' },
+  };
+  const h = cfg[VIEW] || cfg.law;
+  document.querySelector('.eyebrow').textContent = h.eye;
+  document.querySelector('.main-title').innerHTML = h.title;
 }
 
 function fmt(n) {
@@ -480,11 +623,163 @@ function buildCaseView() {
   doSearch2(document.getElementById('q2').value);
 }
 
-function buildImplicitView() {
-  if (SIM) SIM.stop();
-  SIM_NODES = []; SIM_EDGES = [];
-  document.getElementById('foot').textContent = 'Implicit view — model not yet loaded';
+async function buildImplicitView() {
+  if (SIM) { SIM.stop(); SIM = null; }
+  SIM_NODES = []; SIM_EDGES = []; NODE_MAP = {};
   draw();
+
+  // Fetch all pairs (≥0.5) once; filter locally on slider change
+  if (!IMPLICIT_NODES_CACHE.length) {
+    document.getElementById('foot').textContent = 'Loading semantic network…';
+    try {
+      const r = await fetch('/api/implicit_network?threshold=0.35');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      IMPLICIT_NODES_CACHE = d.nodes       || [];
+      IMPLICIT_CASE_CACHE  = d.cases       || [];
+      IMPLICIT_ALL_EDGES   = d.edges       || [];
+      IMPLICIT_CASE_EDGES  = d.case_edges  || [];
+      IMPLICIT_META        = d.meta        || {};
+      document.getElementById('sN').textContent = fmt(d.meta.n_laws  || 0);
+      document.getElementById('sX').textContent = fmt(d.meta.n_cases || 0);
+      document.getElementById('kX').textContent = 'Cases';
+    } catch (err) {
+      document.getElementById('foot').textContent =
+        'Error: ' + err.message + ' — is server.py running?';
+      return;
+    }
+  }
+
+  const W = CV.getBoundingClientRect().width  || 800;
+  const H = CV.getBoundingClientRect().height || 600;
+
+  // Build a lookup of pre-computed law positions from DATA (from explicit_network_layout.json)
+  const explicitPos = {};
+  (DATA.law_nodes || []).forEach(n => {
+    if (n.x != null && n.y != null) explicitPos[n.id] = [n.x, n.y];
+  });
+  const hasLayout = Object.keys(explicitPos).length > 0;
+
+  // ── Law nodes ──
+  SIM_NODES = IMPLICIT_NODES_CACHE.map(n => ({...n, is_case: false}));
+
+  if (hasLayout) {
+    // Use exact same positions as Law Network — gives identical cluster layout
+    SIM_NODES.forEach(n => {
+      const p = explicitPos[n.id];
+      if (p) { n.x = p[0]; n.y = p[1]; }
+      else {
+        n.x = W / 2 + (Math.random() - 0.5) * 200;
+        n.y = H / 2 + (Math.random() - 0.5) * 200;
+      }
+    });
+  } else {
+    // Fallback: EuroVoc-group seeded circle (same approach as build_layout.py)
+    const groupBuckets = {};
+    SIM_NODES.forEach(n => {
+      const g = n.group ?? 0;
+      (groupBuckets[g] = groupBuckets[g] || []).push(n);
+    });
+    const gIds = Object.keys(groupBuckets);
+    const RING  = Math.min(W, H) * 0.28;
+    gIds.forEach((gid, gi) => {
+      const angle = (gi / gIds.length) * Math.PI * 2;
+      const gcx   = W / 2 + RING * Math.cos(angle);
+      const gcy   = H / 2 + RING * Math.sin(angle);
+      groupBuckets[gid].forEach(n => {
+        n.x = gcx + (Math.random() - 0.5) * 120;
+        n.y = gcy + (Math.random() - 0.5) * 120;
+      });
+    });
+  }
+
+  // ── Case nodes — place on outer ring ──
+  const caseNodes = IMPLICIT_CASE_CACHE.map(n => ({...n, is_case: true}));
+  const CASE_RING = Math.min(W, H) * 0.48;
+  caseNodes.forEach((n, i) => {
+    const angle = (i / Math.max(caseNodes.length, 1)) * Math.PI * 2;
+    n.x = W / 2 + (CASE_RING + (Math.random() - 0.5) * 60) * Math.cos(angle);
+    n.y = H / 2 + (CASE_RING + (Math.random() - 0.5) * 60) * Math.sin(angle);
+  });
+
+  SIM_NODES = [...SIM_NODES, ...caseNodes];
+  NODE_MAP  = Object.fromEntries(SIM_NODES.map(n => [n.id, n]));
+
+  rebuildImplicitEdges();
+  doSearch3(document.getElementById('q3').value);
+}
+
+function rebuildImplicitEdges() {
+  const threshold = +(document.getElementById('simSlider')?.value || 0.90);
+  const TOP_K = 8;   // max edges kept per node — keeps graph sparse enough to spread out
+  document.getElementById('simLbl').textContent = threshold.toFixed(2);
+
+  // Filter by threshold then apply top-K per node
+  const above = IMPLICIT_ALL_EDGES.filter(e => e.score >= threshold);
+
+  // Build index for O(1) lookup when assembling SIM_EDGES
+  const edgeMap = new Map();
+  above.forEach(e => {
+    const key = e.source < e.target ? `${e.source}||${e.target}` : `${e.target}||${e.source}`;
+    edgeMap.set(key, e);
+  });
+
+  // Per-node top-K selection
+  const nodeEdges = {};
+  above.forEach(e => {
+    (nodeEdges[e.source] = nodeEdges[e.source] || []).push(e);
+    (nodeEdges[e.target] = nodeEdges[e.target] || []).push(e);
+  });
+  const keptKeys = new Set();
+  Object.values(nodeEdges).forEach(edges => {
+    edges.sort((a, b) => b.score - a.score).slice(0, TOP_K).forEach(e => {
+      keptKeys.add(e.source < e.target ? `${e.source}||${e.target}` : `${e.target}||${e.source}`);
+    });
+  });
+
+  // Degree for node sizing (from kept edges only)
+  const deg = {};
+  SIM_NODES.forEach(n => { deg[n.id] = 0; });
+  SIM_EDGES = [];
+  keptKeys.forEach(key => {
+    const e = edgeMap.get(key);
+    if (!e || !NODE_MAP[e.source] || !NODE_MAP[e.target]) return;
+    deg[e.source] = (deg[e.source] || 0) + 1;
+    deg[e.target] = (deg[e.target] || 0) + 1;
+    SIM_EDGES.push({...e, source: NODE_MAP[e.source], target: NODE_MAP[e.target]});
+  });
+
+  // Case-law edges (already top-K limited at build time, just threshold-filter)
+  IMPLICIT_CASE_EDGES
+    .filter(e => e.score >= threshold && NODE_MAP[e.source] && NODE_MAP[e.target])
+    .forEach(e => {
+      deg[e.source] = (deg[e.source] || 0) + 1;
+      deg[e.target] = (deg[e.target] || 0) + 1;
+      SIM_EDGES.push({...e, source: NODE_MAP[e.source], target: NODE_MAP[e.target]});
+    });
+
+  SIM_NODES.forEach(n => { n.r = n.is_case ? 5 : 3 + Math.min(10, Math.sqrt(deg[n.id] || 0) * 1.3); });
+
+  const nLaws  = SIM_NODES.filter(n => !n.is_case).length;
+  const nCases = SIM_NODES.filter(n =>  n.is_case).length;
+  document.getElementById('sE').innerHTML = '<em>' + fmt(SIM_EDGES.length) + '</em>';
+  document.getElementById('kE').textContent = 'Semantic Edges';
+  document.getElementById('sN').textContent = fmt(nLaws);
+  document.getElementById('sX').textContent = fmt(nCases);
+  document.getElementById('kX').textContent = 'Cases';
+  document.getElementById('foot').textContent =
+    `${nLaws.toLocaleString()} laws · ${nCases.toLocaleString()} cases · ${SIM_EDGES.length.toLocaleString()} edges (top-${TOP_K}/node, ≥${threshold.toFixed(2)})`;
+
+  if (SIM) {
+    SIM.force('link', d3.forceLink(SIM_EDGES).id(d => d.id)
+      .distance(e => e.is_case_edge ? 120 : 20 + (1 - e.score) * 50)
+      .strength(e => e.is_case_edge ? 0.08 : Math.min(0.3, e.score * 0.25)));
+    SIM.alpha(0.3).restart();
+  } else if (SIM_NODES.length > 0) {
+    startSimImplicit();
+  }
+  // Refresh connections tab to reflect new edge set
+  if (SELECTED) selectNode(SELECTED);
 }
 
 // ================================================================
@@ -506,6 +801,24 @@ function startSim(mode) {
     ).strength(0.03))
     .force('collide', d3.forceCollide().radius(d => d.r + 2).iterations(1))
     .alpha(1).alphaDecay(0.018)
+    .on('tick', draw);
+}
+
+function startSimImplicit() {
+  if (SIM) SIM.stop();
+  const W = CV.getBoundingClientRect().width  || 800;
+  const H = CV.getBoundingClientRect().height || 600;
+  SIM = d3.forceSimulation(SIM_NODES)
+    .force('link', d3.forceLink(SIM_EDGES).id(d => d.id)
+      // Short edges like the law network (citation distance ≈ 45)
+      // case-law edges slightly longer so they sit on the outer ring
+      .distance(e => e.is_case_edge ? 120 : 20 + (1 - e.score) * 50)
+      .strength(e => e.is_case_edge ? 0.08 : Math.min(0.3, e.score * 0.25)))
+    .force('charge', d3.forceManyBody().strength(-60).distanceMax(300))
+    .force('center', d3.forceCenter(W / 2, H / 2).strength(0.015))
+    .force('collide', d3.forceCollide().radius(d => d.r + 3).iterations(2))
+    // Fast decay: preserves initial positions (from layout file) more faithfully
+    .alpha(0.6).alphaDecay(0.03)
     .on('tick', draw);
 }
 
@@ -543,7 +856,10 @@ function draw() {
   CTX.translate(TRANSFORM.x, TRANSFORM.y);
   CTX.scale(TRANSFORM.k, TRANSFORM.k);
 
-  const nbs     = nbSet();
+  const activeSemanticQ = VIEW === 'implicit'
+    ? (document.getElementById('q3-semantic')?.value?.trim() || '')
+    : '';
+  const nbs     = activeSemanticQ ? null : nbSet();
   const focusId = HOVER ? HOVER.id : (SELECTED ? SELECTED.id : null);
 
   // --- edges ---
@@ -554,15 +870,39 @@ function draw() {
     if (!s || !t || s.x == null || t.x == null) continue;
 
     let alpha, lw;
-    if (nbs) {
-      const inNb = nbs.has(s.id) && nbs.has(t.id);
-      alpha = inNb ? 0.75 : 0.04;
-      lw    = inNb ? 1.4  : 0.4;
+    if (e.score != null) {
+      // Implicit semantic edge — weight by similarity score
+      if (nbs) {
+        const inNb = nbs.has(s.id) && nbs.has(t.id);
+        alpha = inNb ? 0.4 + e.score * 0.55 : 0.03;
+        lw    = inNb ? 0.8 + e.score * 1.2  : 0.3;
+      } else if (QUERY_FOCUS_IDS) {
+        const hit = QUERY_FOCUS_IDS.has(s.id) && QUERY_FOCUS_IDS.has(t.id);
+        alpha = hit ? 0.5 + e.score * 0.4 : 0.02;
+        lw    = hit ? 1.0 + e.score * 0.8 : 0.2;
+      } else {
+        alpha = 0.08 + e.score * 0.35;
+        lw    = 0.4  + e.score * 0.8;
+      }
     } else {
-      alpha = 0.22;
-      lw    = 0.8;
+      if (nbs) {
+        const inNb = nbs.has(s.id) && nbs.has(t.id);
+        alpha = inNb ? 0.75 : 0.04;
+        lw    = inNb ? 1.4  : 0.4;
+      } else if (QUERY_FOCUS_IDS) {
+        const hit = QUERY_FOCUS_IDS.has(s.id) && QUERY_FOCUS_IDS.has(t.id);
+        alpha = hit ? 0.7 : 0.02;
+        lw    = hit ? 1.2 : 0.2;
+      } else {
+        alpha = 0.22;
+        lw    = 0.8;
+      }
     }
-    const hex  = EDGE_COLOR[e.type] || '#888';
+    // Implicit edges: color matches source node's EuroVoc group (same palette as nodes)
+    // Explicit edges: use the standard type color
+    const hex = (e.score != null)
+      ? GROUP_COLORS[(s.group || 0) % GROUP_COLORS.length]
+      : (EDGE_COLOR[e.type] || '#888');
     CTX.strokeStyle = hexAlpha(hex, alpha);
     CTX.lineWidth   = lw / TRANSFORM.k;
     CTX.beginPath();
@@ -576,7 +916,9 @@ function draw() {
     if (n.x == null) continue;
     const isFocus = focusId === n.id;
     const isInNb  = nbs && nbs.has(n.id) && !isFocus;
-    const dimmed  = nbs && !nbs.has(n.id) && !isFocus;
+    const dimmed  = nbs
+      ? (!nbs.has(n.id) && !isFocus)
+      : (QUERY_FOCUS_IDS ? (!QUERY_FOCUS_IDS.has(n.id) && !isFocus) : false);
     const r2 = n.r * (isFocus ? 1.55 : 1);
 
     if (isFocus) {
@@ -751,7 +1093,31 @@ function wireEvents() {
   // search boxes
   document.getElementById('q1').addEventListener('input', e => doSearch1(e.target.value));
   document.getElementById('q2').addEventListener('input', e => doSearch2(e.target.value));
-  doSearch1(''); doSearch2('');
+  document.getElementById('q3').addEventListener('input', e => {
+    doSearch3(e.target.value);
+  });
+  // Dedicated semantic (AI) query input — separate from law-name search
+  document.getElementById('q3-semantic').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      IMPLICIT_QUERY = e.target.value;
+      doSemanticSearch(e.target.value);
+    }
+  });
+  document.getElementById('q3-semantic').addEventListener('input', e => {
+    if (!e.target.value.trim()) { QUERY_FOCUS_IDS = null; draw(); }
+  });
+  // Escape closes the related-law popup
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closePopup();
+  });
+  doSearch1(''); doSearch2(''); doSearch3('');
+
+  // implicit similarity slider
+  document.getElementById('simSlider').addEventListener('input', () => {
+    if (VIEW === 'implicit' && SIM_NODES.length) rebuildImplicitEdges();
+    else document.getElementById('simLbl').textContent =
+      (+document.getElementById('simSlider').value).toFixed(2);
+  });
 }
 
 function inv(px, py) {
@@ -784,6 +1150,70 @@ function doSearch1(term) {
   renderResults('res1', pool, 'law');
 }
 
+function doSearch3(term) {
+  const pool = searchNodes(SIM_NODES, term);
+  renderResults('res3', pool, 'law');
+}
+
+async function doSemanticSearch(term) {
+  term = term.trim();
+  if (!term) { QUERY_FOCUS_IDS = null; draw(); return; }
+  // Always search at 0.5 threshold — show all matches, regardless of the edge slider
+  const SEMANTIC_THRESHOLD = 0.5;
+  const out = document.getElementById('res3-semantic');
+  out.innerHTML = '<div class="result-empty">searching…</div>';
+  try {
+    const r = await fetch('/api/search', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query: term, threshold: SEMANTIC_THRESHOLD})
+    });
+    const d = await r.json();
+    // Include all results that have a node in the current view (laws + cases)
+    const results = (d.results || []).filter(x => NODE_MAP[x.parent_id] || x.score >= SEMANTIC_THRESHOLD);
+    QUERY_FOCUS_IDS = results.length ? new Set(results.map(x => x.parent_id)) : null;
+
+    // Cache best chunk text per parent_id (used in Full Text tab when node is clicked)
+    QUERY_BEST_CHUNKS = {};
+    results.forEach(x => { if (x.best_chunk_text) QUERY_BEST_CHUNKS[x.parent_id] = x.best_chunk_text; });
+
+    // Show the query chip
+    document.getElementById('queryChipText').textContent = term;
+    document.getElementById('queryChip').classList.add('active');
+
+    if (!results.length) {
+      out.innerHTML = '<div class="result-empty">no matches above 0.5</div>';
+    } else {
+      out.innerHTML = results.map((x, i) => {
+        const isCase   = x.source === 'caselaw';
+        const friendly = KNOWN_LAWS[x.parent_id];
+        const n        = NODE_MAP[x.parent_id];
+        const lbl      = friendly || (n ? (n.label || n.name) : x.parent_id);
+        const display  = friendly
+          ? `<b style="color:var(--gold)">${esc(friendly)}</b>`
+          : esc(trunc(lbl, 30));
+        const typeTag  = isCase ? 'CASE' : 'LAW';
+        const typeCol  = isCase ? '#4361ee' : '#5a6075';
+        return `<div class="result-row" data-id="${esc(x.parent_id)}">
+          <span class="rn">${String(i+1).padStart(2,'0')}</span>
+          <span class="rt" style="color:${typeCol}">${typeTag}</span>
+          <span>${display}</span>
+          <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--gold)">${x.score.toFixed(3)}</span>
+        </div>`;
+      }).join('');
+      out.querySelectorAll('.result-row').forEach(row => {
+        row.addEventListener('click', () => {
+          const n = NODE_MAP[row.dataset.id];
+          if (n) selectAndCenter(n);
+        });
+      });
+    }
+    draw();
+  } catch (err) {
+    out.innerHTML = `<div class="result-empty">error — ${esc(err.message)}</div>`;
+  }
+}
+
 function doSearch2(term) {
   const laws  = searchNodes(DATA ? DATA.law_nodes  : [], term);
   const cases = searchNodes(DATA ? DATA.case_nodes : [], term);
@@ -794,41 +1224,42 @@ function doSearch2(term) {
 function searchNodes(nodes, term) {
   term = term.trim().toLowerCase();
   if (!term) {
-    return [...nodes]
-      .sort((a, b) => {
-        const da = SIM_EDGES.filter(e => {
-          const s = typeof e.source === 'object' ? e.source.id : e.source;
-          const t = typeof e.target === 'object' ? e.target.id : e.target;
-          return s === a.id || t === a.id;
-        }).length;
-        const db = SIM_EDGES.filter(e => {
-          const s = typeof e.source === 'object' ? e.source.id : e.source;
-          const t = typeof e.target === 'object' ? e.target.id : e.target;
-          return s === b.id || t === b.id;
-        }).length;
-        return db - da;
-      })
-      .slice(0, 25);
+    // Pre-compute degree map (O(E)) so sorting is O(N log N) not O(N²E)
+    const degMap = {};
+    for (const e of (SIM_EDGES || [])) {
+      const s = typeof e.source === 'object' ? e.source.id : e.source;
+      const t = typeof e.target === 'object' ? e.target.id : e.target;
+      degMap[s] = (degMap[s] || 0) + 1;
+      degMap[t] = (degMap[t] || 0) + 1;
+    }
+    const known  = nodes.filter(n =>  KNOWN_LAWS[n.id]);
+    const others = nodes.filter(n => !KNOWN_LAWS[n.id])
+                        .sort((a, b) => (degMap[b.id] || 0) - (degMap[a.id] || 0));
+    return [...known, ...others];   // all nodes, no cap
   }
-  return nodes
-    .filter(n =>
-      (n.label || '').toLowerCase().includes(term) ||
-      (n.name  || '').toLowerCase().includes(term) ||
-      (n.id    || '').toLowerCase().includes(term)
-    )
-    .slice(0, 40);
+  return nodes.filter(n =>
+    (KNOWN_LAWS[n.id] || '').toLowerCase().includes(term) ||
+    (n.label || '').toLowerCase().includes(term) ||
+    (n.name  || '').toLowerCase().includes(term) ||
+    (n.id    || '').toLowerCase().includes(term)
+  );  // all matches, no cap
 }
 
 function renderResults(containerId, pool, mode) {
   const out = document.getElementById(containerId);
   if (!pool.length) { out.innerHTML = '<div class="result-empty">no matches</div>'; return; }
-  out.innerHTML = pool.map((n, i) =>
-    `<div class="result-row" data-id="${esc(n.id)}">
+  out.innerHTML = pool.map((n, i) => {
+    const friendly = KNOWN_LAWS[n.id];
+    const display  = friendly
+      ? `<b style="color:var(--gold)">${esc(friendly)}</b>`
+      : esc(trunc(n.label || n.id, 34));
+    const typeTag  = n.is_case || (mode === 'mixed' && n.subject_matter) ? 'CASE' : 'LAW';
+    return `<div class="result-row" data-id="${esc(n.id)}">
        <span class="rn">${String(i + 1).padStart(2, '0')}</span>
-       <span class="rt">${n.is_case || (mode === 'mixed' && n.subject_matter) ? 'CASE' : 'LAW'}</span>
-       <span>${esc(trunc(n.label || n.id, 34))}</span>
-     </div>`
-  ).join('');
+       <span class="rt">${typeTag}</span>
+       <span>${display}</span>
+     </div>`;
+  }).join('');
   out.querySelectorAll('.result-row').forEach(row => {
     row.addEventListener('click', () => {
       const n = NODE_MAP[row.dataset.id]
@@ -836,7 +1267,8 @@ function renderResults(containerId, pool, mode) {
         || DATA.case_nodes.find(x => x.id === row.dataset.id);
       if (!n) return;
       // If the node isn't in the current view, switch to the right one
-      if (n.is_case && VIEW !== 'case') {
+      if (n.is_case && VIEW !== 'case' && !NODE_MAP[n.id]) {
+        // Node is a case not present in the current view — switch to law-case tab
         document.querySelector('.view-tab[data-view="case"]').click();
         setTimeout(() => selectAndCenter(NODE_MAP[n.id] || n), 400);
       } else {
@@ -861,16 +1293,41 @@ function selectAndCenter(n) {
 // ================================================================
 function selectNode(n) {
   SELECTED = n;
-  document.getElementById('pType').textContent   = n.is_case ? 'Case' : 'Law';
-  document.getElementById('pName').textContent   = n.name || n.label || n.id;
-  document.getElementById('pCelex').textContent  = n.id;
+  document.getElementById('pType').textContent = n.is_case ? 'Case' : 'Law';
+
+  if (VIEW === 'implicit') {
+    if (n.is_case) {
+      // Case: prefer Case Name (EN) as title; shared base case number (label) as sub-id
+      const caseTitle = n.case_name || (n.name && n.name !== n.id && n.name !== n.label ? n.name : (n.label || n.id));
+      const caseSub   = (n.label && n.label !== n.id) ? n.label : n.id;
+      document.getElementById('pName').textContent  = caseTitle;
+      document.getElementById('pCelex').textContent = caseSub;
+    } else {
+      // Law: short friendly name or celex
+      const friendly = KNOWN_LAWS[n.id];
+      document.getElementById('pName').textContent  = friendly || n.id;
+      document.getElementById('pCelex').textContent = n.id;
+    }
+  } else {
+    document.getElementById('pName').textContent  = n.name || n.label || n.id;
+    document.getElementById('pCelex').textContent = n.id;
+  }
 
   // Info tab
   const info = document.getElementById('tab-info');
   if (n.is_case) {
-    info.innerHTML = `
-      ${tagGroup('Subject Matter', [n.subject_matter].filter(Boolean))}
-      ${tagGroup('Descriptor', [n.descriptor].filter(Boolean))}`;
+    const smTags = n.subject_matter ? n.subject_matter.split('|').map(s => s.trim()).filter(Boolean) : [];
+    const deTags = n.descriptor     ? n.descriptor.split('|').map(s => s.trim()).filter(Boolean)     : [];
+    const caseInfo = tagGroup('Subject Matter', smTags) + tagGroup('Descriptor', deTags);
+    info.innerHTML = caseInfo ||
+      '<div class="empty-state" style="margin-top:12px"><p>No metadata available for this case.</p></div>';
+  } else if (VIEW === 'implicit') {
+    // In implicit tab: show full title at top of info, then metadata tags
+    const fullTitle = n.name && n.name !== n.id ? `<div class="info-full-title">${esc(n.name)}</div>` : '';
+    info.innerHTML = fullTitle +
+      tagGroup('Subject Matter', n.subject_matter || []) +
+      tagGroup('EuroVoc', n.eurovoc || []) +
+      tagGroup('Directory', n.directory || []);
   } else {
     info.innerHTML = `
       ${tagGroup('Subject Matter', n.subject_matter || [])}
@@ -890,14 +1347,30 @@ function selectNode(n) {
   if (!conns.length) {
     connEl.innerHTML = '<div class="empty-state"><div class="icon">[—]</div><p>No connections visible under current filters.</p></div>';
   } else {
-    connEl.innerHTML = conns.slice(0, 40).map((e, i) => {
+    const isImplicit = VIEW === 'implicit';
+    const sorted = isImplicit
+      ? [...conns].sort((a, b) => (b.score || 0) - (a.score || 0))
+      : conns;
+    connEl.innerHTML = sorted.slice(0, 40).map((e, i) => {
       const sid   = typeof e.source === 'object' ? e.source.id : e.source;
       const tid   = typeof e.target === 'object' ? e.target.id : e.target;
       const othId = sid === n.id ? tid : sid;
       const oth   = NODE_MAP[othId];
-      const col   = EDGE_COLOR[e.type] || '#888';
       const lbl   = oth ? (oth.label || oth.id) : othId;
-      const sc    = e.shared_count ? ` (×${e.shared_count})` : '';
+      if (isImplicit && e.score != null) {
+        const pct = Math.round(e.score * 100);
+        return `<div class="nb-row" data-id="${esc(othId)}">
+          <div class="nb-rank">${String(i + 1).padStart(2, '0')}</div>
+          <div class="nb-body">
+            <div class="nb-name">${esc(trunc(lbl, 42))}</div>
+            <div class="nb-celex">${esc(othId)}</div>
+          </div>
+          <div class="nb-bar"><div style="width:${pct}%"></div></div>
+          <div class="nb-sc">${e.score.toFixed(3)}</div>
+        </div>`;
+      }
+      const col = EDGE_COLOR[e.type] || '#888';
+      const sc  = e.shared_count ? ` (×${e.shared_count})` : '';
       return `<div class="nb-row" data-id="${esc(othId)}">
         <div class="nb-rank">${String(i + 1).padStart(2, '0')}</div>
         <div class="nb-body">
@@ -910,10 +1383,47 @@ function selectNode(n) {
     connEl.querySelectorAll('.nb-row').forEach(row => {
       row.addEventListener('click', () => {
         const oth = NODE_MAP[row.dataset.id];
-        if (oth) selectAndCenter(oth);
+        if (!oth) return;
+        if (VIEW === 'implicit') {
+          // Open a popup showing the related law's text — keep the current selected node
+          openRelatedPopup(oth, SELECTED ? SELECTED.id : null);
+        } else {
+          // Explicit views: navigate to the connected node as before
+          selectAndCenter(oth);
+        }
       });
     });
   }
+
+  // Full text tab — fetch live from server.py
+  const ftEl = document.getElementById('tab-fulltext');
+  ftEl.innerHTML = '<div class="empty-state"><div class="icon">[…]</div><p>Loading…</p></div>';
+  const src = n.is_case ? 'caselaw' : 'legislation';
+  fetch(`/api/fulltext?parent_id=${encodeURIComponent(n.id)}&source=${src}`)
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(d => {
+      if (!d.text) {
+        ftEl.innerHTML = '<div class="empty-state"><div class="icon">[—]</div><p>No text available.</p></div>';
+        return;
+      }
+      const html = marked.parse(d.text);
+      const eurlexLink = !n.is_case
+        ? `<p style="margin-top:18px;font-size:11px;color:var(--muted)">
+             <a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:${esc(n.id)}"
+                target="_blank" style="color:var(--gold-2)">View on EUR-Lex ↗</a></p>`
+        : '';
+      ftEl.innerHTML = `<div class="md-body">${html}</div>${eurlexLink}`;
+      const mdBody = ftEl.querySelector('.md-body');
+      // If semantic query is active, scroll to + highlight the most relevant paragraph
+      const activeSemanticQ = document.getElementById('q3-semantic')?.value?.trim();
+      if (mdBody && activeSemanticQ && QUERY_BEST_CHUNKS[n.id]) {
+        scrollToChunkIn(mdBody, QUERY_BEST_CHUNKS[n.id]);
+      }
+      if (IMPLICIT_QUERY) highlightText(ftEl, IMPLICIT_QUERY);
+    })
+    .catch(() => {
+      ftEl.innerHTML = '<div class="empty-state"><div class="icon">[—]</div><p>Could not load — is server.py running?</p></div>';
+    });
 
   document.getElementById('panel').classList.add('open');
   draw();
@@ -931,6 +1441,119 @@ function closePanel() {
   document.getElementById('panel').classList.remove('open');
   SELECTED = null;
   draw();
+}
+
+function clearSemanticQuery() {
+  document.getElementById('q3-semantic').value = '';
+  document.getElementById('res3-semantic').innerHTML = '';
+  document.getElementById('queryChip').classList.remove('active');
+  QUERY_FOCUS_IDS   = null;
+  QUERY_BEST_CHUNKS = {};
+  IMPLICIT_QUERY    = '';
+  draw();
+}
+
+// ================================================================
+// Related-law popup (implicit view)
+// ================================================================
+function openRelatedPopup(othNode, fromId) {
+  const popup = document.getElementById('ctxPopup');
+  document.getElementById('ctxPopupTitle').textContent =
+    KNOWN_LAWS[othNode.id] || othNode.name || othNode.label || othNode.id;
+  document.getElementById('ctxPopupCelex').textContent = othNode.id;
+  const body = document.getElementById('ctxPopupBody');
+  body.innerHTML = '<div class="empty-state"><div class="icon">[…]</div><p>Loading…</p></div>';
+  popup.classList.add('open');
+
+  const src = othNode.is_case ? 'caselaw' : 'legislation';
+  fetch(`/api/fulltext?parent_id=${encodeURIComponent(othNode.id)}&source=${src}`)
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(d => {
+      if (!d.text) {
+        body.innerHTML = '<div class="empty-state"><p>No text available.</p></div>';
+        return;
+      }
+      const eurlexLink = !othNode.is_case
+        ? `<p style="margin-top:18px;font-size:11px;color:var(--muted)">
+             <a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:${esc(othNode.id)}"
+                target="_blank" style="color:var(--gold-2)">View on EUR-Lex ↗</a></p>`
+        : '';
+      body.innerHTML = `<div class="md-body">${marked.parse(d.text)}</div>${eurlexLink}`;
+      if (fromId && fromId !== othNode.id) {
+        fetch(`/api/best_chunk?law_a=${encodeURIComponent(fromId)}&law_b=${encodeURIComponent(othNode.id)}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { if (d && d.best_chunk) scrollToChunkIn(body, d.best_chunk); });
+      }
+    })
+    .catch(() => {
+      body.innerHTML = '<div class="empty-state"><p>Could not load — is server.py running?</p></div>';
+    });
+}
+
+function closePopup() {
+  document.getElementById('ctxPopup').classList.remove('open');
+}
+
+function scrollToChunkIn(container, chunkText) {
+  if (!chunkText) return;
+  const re = new RegExp(
+    chunkText.trim().slice(0, 40).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'
+  );
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  let found = null;
+  while (walker.nextNode()) {
+    if (re.test(walker.currentNode.textContent)) { found = walker.currentNode; break; }
+  }
+  if (!found) return;
+  const el = found.parentElement;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.style.background = '#ffe066';  // yellow highlight — stays until popup closes
+}
+
+function highlightText(container, query) {
+  if (!query) return;
+  const terms = query.trim().split(/\s+/).filter(t => t.length > 2);
+  if (!terms.length) return;
+  const re = new RegExp(
+    '(' + terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')',
+    'gi'
+  );
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(node => {
+    if (!re.test(node.textContent)) return;
+    const span = document.createElement('span');
+    span.innerHTML = node.textContent.replace(re, '<mark>$1</mark>');
+    node.parentNode.replaceChild(span, node);
+  });
+}
+
+function scrollToChunk(chunkText) {
+  if (!chunkText) return;
+  // First sentence of the chunk as anchor (up to 80 chars)
+  const anchor = chunkText.trim().slice(0, 80).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(anchor.slice(0, 40), 'i');
+
+  // Poll until the md-body is rendered (fulltext loads async)
+  let attempts = 0;
+  const check = () => {
+    const ftEl = document.querySelector('#tab-fulltext .md-body');
+    if (!ftEl) {
+      if (++attempts < 30) setTimeout(check, 200);
+      return;
+    }
+    const walker = document.createTreeWalker(ftEl, NodeFilter.SHOW_TEXT);
+    let found = null;
+    while (walker.nextNode()) {
+      if (re.test(walker.currentNode.textContent)) { found = walker.currentNode; break; }
+    }
+    if (!found) return;
+    const el = found.parentElement;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.background = '#ffe066';  // yellow highlight — stays until user navigates away
+  };
+  check();
 }
 </script>
 </body>
