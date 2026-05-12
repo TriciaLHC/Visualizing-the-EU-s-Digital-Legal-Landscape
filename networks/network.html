@@ -153,6 +153,18 @@ canvas.hover{cursor:pointer}
   border-bottom:1px dashed var(--paper-rule);cursor:pointer}
 .nb-row:last-child{border-bottom:0}
 .nb-row:hover .nb-name{color:var(--gold-2)}
+.nb-expand{cursor:pointer;flex:none;color:var(--muted);font-size:10px;padding:2px 5px;
+  border-radius:3px;border:1px solid var(--paper-rule);background:none;line-height:1;
+  transition:transform .18s;display:inline-flex;align-items:center;user-select:none}
+.nb-expand:hover{color:var(--gold-2);border-color:var(--gold-2)}
+.nb-expand.open{transform:rotate(90deg)}
+.nb-chunks{display:none;padding:4px 0 6px 34px;border-bottom:1px dashed var(--paper-rule);background:var(--paper-soft,#f8f6f0)}
+.nb-chunk-row{display:flex;gap:8px;padding:5px 6px;border-bottom:1px dotted var(--paper-rule);
+  font-size:11px;line-height:1.55;align-items:flex-start}
+.nb-chunk-row:last-child{border-bottom:0}
+.nb-chunk-sc{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--gold-2);
+  flex:none;padding-top:1px;min-width:36px;text-align:right}
+.nb-chunk-txt{color:var(--ink);opacity:.75;word-break:break-word;font-family:Georgia,serif}
 .nb-rank{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);min-width:22px}
 .nb-body{flex:1;min-width:0}
 .nb-name{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:13.5px;
@@ -229,9 +241,18 @@ canvas.hover{cursor:pointer}
   color:#6b7080;font-size:17px;line-height:1;padding:0 2px;
   border-radius:50%;transition:color .15s}
 .query-chip .qc-x:hover{color:var(--gold)}
+#nb-tt{position:fixed;pointer-events:none;background:rgba(20,24,31,0.88);color:#fff;
+  font:11px 'IBM Plex Sans',sans-serif;padding:5px 9px;border-radius:4px;z-index:9999;
+  max-width:280px;line-height:1.4;display:none;white-space:normal}
+.conn-filter-bar{display:flex;gap:5px;padding:10px 14px 6px;border-bottom:1px solid var(--paper-rule)}
+.conn-chip{font:600 10px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;
+  padding:3px 9px;border-radius:20px;border:1px solid var(--paper-rule);cursor:pointer;
+  background:transparent;color:var(--muted);transition:all .15s}
+.conn-chip.active{background:var(--ink);color:#fff;border-color:var(--ink)}
 </style>
 </head>
 <body>
+<div id="nb-tt"></div>
 <div class="app">
 
 <!-- ===== SIDEBAR ===== -->
@@ -312,14 +333,14 @@ canvas.hover{cursor:pointer}
     <div class="group-label">Search</div>
     <div class="search">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9aa1b3" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q3" type="text" placeholder="Law name or free-text query…" autocomplete="off">
+      <input id="q3" type="text" placeholder="Law name or Case number…" autocomplete="off">
     </div>
     <div class="results" id="res3"></div>
 
     <div class="group-label">Connection Filter</div>
     <div class="control">
-      <label>Similarity Score <b id="simLbl">0.90</b></label>
-      <input id="simSlider" type="range" min="0.5" max="0.99" step="0.01" value="0.90">
+      <label>Similarity Score <b id="simLbl">0.85</b></label>
+      <input id="simSlider" type="range" min="0.5" max="0.99" step="0.01" value="0.85">
     </div>
 
     <div class="group-label">Legend</div>
@@ -444,7 +465,36 @@ let DATA = null;
 let VIEW = 'law';          // 'law' | 'case' | 'implicit'
 let SIM  = null;
 let TRANSFORM = d3.zoomIdentity;
-let HOVER = null, SELECTED = null;
+let HOVER = null, SELECTED = null, POPUP_NODE = null;
+
+// Custom instant tooltip for truncated labels (avoids browser's ~500ms native delay)
+(function() {
+  const tt = document.getElementById('nb-tt');
+  let _timer = null;
+  document.addEventListener('mousemove', e => {
+    if (tt.style.display === 'block') {
+      tt.style.left = (e.clientX + 12) + 'px';
+      tt.style.top  = (e.clientY + 14) + 'px';
+    }
+  });
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-tt]');
+    if (!el) return;
+    clearTimeout(_timer);
+    _timer = setTimeout(() => {
+      tt.textContent = el.dataset.tt;
+      tt.style.left  = (e.clientX + 12) + 'px';
+      tt.style.top   = (e.clientY + 14) + 'px';
+      tt.style.display = 'block';
+    }, 80);
+  });
+  document.addEventListener('mouseout', e => {
+    const el = e.target.closest('[data-tt]');
+    if (!el) return;
+    clearTimeout(_timer);
+    tt.style.display = 'none';
+  });
+})();
 let SIM_NODES = [];        // nodes active in current simulation
 let SIM_EDGES = [];        // edges (with source/target as node refs)
 let NODE_MAP  = {};        // id → node
@@ -464,6 +514,9 @@ let IMPLICIT_META        = {};   // {n_laws, n_cases, n_edges} from last fetch
 let IMPLICIT_QUERY     = '';     // active search term for full-text highlighting
 let QUERY_FOCUS_IDS   = null;   // Set of parent_ids from semantic search (dims others)
 let QUERY_BEST_CHUNKS = {};     // {parent_id: best_chunk_text} from last semantic search
+let RELATED_EDGES     = [];     // edges built from last /api/related call — drives canvas + nbSet in implicit view
+let _relatedDebounce  = null;   // timer handle for debouncing /api/related refetch on slider move
+let CORPUS_ID_MAP     = {};     // corpus_id (ECLI) → node — O(1) fallback for resolveNode
 
 // ================================================================
 // Load
@@ -704,15 +757,20 @@ async function buildImplicitView() {
 
   SIM_NODES = [...SIM_NODES, ...caseNodes];
   NODE_MAP  = Object.fromEntries(SIM_NODES.map(n => [n.id, n]));
+  rebuildCorpusIdMap();
 
   rebuildImplicitEdges();
   doSearch3(document.getElementById('q3').value);
 }
 
+// Slider value IS the cosine threshold — no remapping needed
+function sliderToThreshold(d) { return d; }
+
 function rebuildImplicitEdges() {
-  const threshold = +(document.getElementById('simSlider')?.value || 0.90);
-  const TOP_K = 8;   // max edges kept per node — keeps graph sparse enough to spread out
-  document.getElementById('simLbl').textContent = threshold.toFixed(2);
+  const displayed  = +(document.getElementById('simSlider')?.value || 0.85);
+  const threshold  = sliderToThreshold(displayed);
+  const TOP_K = 8;
+  document.getElementById('simLbl').textContent = displayed.toFixed(2);
 
   // Filter by threshold then apply top-K per node
   const above = IMPLICIT_ALL_EDGES.filter(e => e.score >= threshold);
@@ -749,37 +807,70 @@ function rebuildImplicitEdges() {
     SIM_EDGES.push({...e, source: NODE_MAP[e.source], target: NODE_MAP[e.target]});
   });
 
-  // Case-law edges (already top-K limited at build time, just threshold-filter)
+  // Case-law edges — resolve via resolveNode so ECLI source IDs map to shared-case-number
+  // NODE_MAP keys (e.g. edge.source = "ECLI:EU:C:2024:123" → node.id = "C-336/23").
   IMPLICIT_CASE_EDGES
-    .filter(e => e.score >= threshold && NODE_MAP[e.source] && NODE_MAP[e.target])
+    .filter(e => e.score >= threshold)
     .forEach(e => {
-      deg[e.source] = (deg[e.source] || 0) + 1;
-      deg[e.target] = (deg[e.target] || 0) + 1;
-      SIM_EDGES.push({...e, source: NODE_MAP[e.source], target: NODE_MAP[e.target]});
+      const sNode = NODE_MAP[e.source] || resolveNode(e.source);
+      const tNode = NODE_MAP[e.target] || resolveNode(e.target);
+      if (!sNode || !tNode) return;
+      deg[sNode.id] = (deg[sNode.id] || 0) + 1;
+      deg[tNode.id] = (deg[tNode.id] || 0) + 1;
+      SIM_EDGES.push({...e, source: sNode, target: tNode});
     });
 
-  SIM_NODES.forEach(n => { n.r = n.is_case ? 5 : 3 + Math.min(10, Math.sqrt(deg[n.id] || 0) * 1.3); });
+  // Store degree on each node — used by draw() to hide isolated case nodes
+  SIM_NODES.forEach(n => {
+    n._deg = deg[n.id] || 0;
+    n.r    = n.is_case ? 5 : 3 + Math.min(10, Math.sqrt(n._deg) * 1.3);
+  });
+
+  // On first load: snap connected case nodes to the centroid of their law neighbours
+  // so they start near the cluster instead of on a distant outer ring.
+  const caseCentroid = {};
+  SIM_EDGES.filter(e => e.is_case_edge).forEach(e => {
+    const cNode = e.source.is_case ? e.source : e.target;
+    const lNode = e.source.is_case ? e.target : e.source;
+    if (!caseCentroid[cNode.id]) caseCentroid[cNode.id] = { x: 0, y: 0, n: 0 };
+    if (lNode.x != null) {
+      caseCentroid[cNode.id].x += lNode.x;
+      caseCentroid[cNode.id].y += lNode.y;
+      caseCentroid[cNode.id].n++;
+    }
+  });
+  SIM_NODES.filter(n => n.is_case && !n._positioned).forEach(n => {
+    const c = caseCentroid[n.id];
+    if (c && c.n > 0) {
+      n.x = c.x / c.n + (Math.random() - 0.5) * 60;
+      n.y = c.y / c.n + (Math.random() - 0.5) * 60;
+      n._positioned = true;
+    }
+  });
 
   const nLaws  = SIM_NODES.filter(n => !n.is_case).length;
-  const nCases = SIM_NODES.filter(n =>  n.is_case).length;
+  const nCases = SIM_NODES.filter(n => n.is_case && n._deg > 0).length;
   document.getElementById('sE').innerHTML = '<em>' + fmt(SIM_EDGES.length) + '</em>';
   document.getElementById('kE').textContent = 'Semantic Edges';
   document.getElementById('sN').textContent = fmt(nLaws);
   document.getElementById('sX').textContent = fmt(nCases);
   document.getElementById('kX').textContent = 'Cases';
+  document.getElementById('sX').textContent = fmt(nCases);
   document.getElementById('foot').textContent =
-    `${nLaws.toLocaleString()} laws · ${nCases.toLocaleString()} cases · ${SIM_EDGES.length.toLocaleString()} edges (top-${TOP_K}/node, ≥${threshold.toFixed(2)})`;
+    `${nLaws.toLocaleString()} laws · ${nCases.toLocaleString()} connected cases · ${SIM_EDGES.length.toLocaleString()} edges (top-${TOP_K}/node, ≥${threshold.toFixed(2)})`;
 
   if (SIM) {
     SIM.force('link', d3.forceLink(SIM_EDGES).id(d => d.id)
-      .distance(e => e.is_case_edge ? 120 : 20 + (1 - e.score) * 50)
-      .strength(e => e.is_case_edge ? 0.08 : Math.min(0.3, e.score * 0.25)));
+      .distance(e => e.is_case_edge ? 60 : 15 + (1 - e.score) * 30)
+      .strength(e => e.is_case_edge ? 0.2 : Math.min(0.5, e.score * 0.4)));
     SIM.alpha(0.3).restart();
   } else if (SIM_NODES.length > 0) {
     startSimImplicit();
   }
-  // Refresh connections tab to reflect new edge set
-  if (SELECTED) selectNode(SELECTED);
+  // Refresh connections tab — debounced so rapid slider drags don't flood /api/related.
+  // Pass skipFulltext:true so the already-loaded full-text tab isn't re-fetched on every slide.
+  clearTimeout(_relatedDebounce);
+  if (SELECTED) _relatedDebounce = setTimeout(() => selectNode(SELECTED, { skipFulltext: true }), 300);
 }
 
 // ================================================================
@@ -810,14 +901,11 @@ function startSimImplicit() {
   const H = CV.getBoundingClientRect().height || 600;
   SIM = d3.forceSimulation(SIM_NODES)
     .force('link', d3.forceLink(SIM_EDGES).id(d => d.id)
-      // Short edges like the law network (citation distance ≈ 45)
-      // case-law edges slightly longer so they sit on the outer ring
-      .distance(e => e.is_case_edge ? 120 : 20 + (1 - e.score) * 50)
-      .strength(e => e.is_case_edge ? 0.08 : Math.min(0.3, e.score * 0.25)))
-    .force('charge', d3.forceManyBody().strength(-60).distanceMax(300))
-    .force('center', d3.forceCenter(W / 2, H / 2).strength(0.015))
-    .force('collide', d3.forceCollide().radius(d => d.r + 3).iterations(2))
-    // Fast decay: preserves initial positions (from layout file) more faithfully
+      .distance(e => e.is_case_edge ? 60 : 15 + (1 - e.score) * 30)
+      .strength(e => e.is_case_edge ? 0.2 : Math.min(0.5, e.score * 0.4)))
+    .force('charge', d3.forceManyBody().strength(-25).distanceMax(150))
+    .force('center', d3.forceCenter(W / 2, H / 2).strength(0.06))
+    .force('collide', d3.forceCollide().radius(d => d.r + 2).iterations(2))
     .alpha(0.6).alphaDecay(0.03)
     .on('tick', draw);
 }
@@ -840,7 +928,9 @@ window.addEventListener('resize', resize);
 function nbSet() {
   if (!SELECTED) return null;
   const s = new Set([SELECTED.id]);
-  (SIM_EDGES || []).forEach(e => {
+  // In implicit view use live RELATED_EDGES (from /api/related); otherwise precomputed SIM_EDGES
+  const edges = (VIEW === 'implicit' && RELATED_EDGES.length) ? RELATED_EDGES : (SIM_EDGES || []);
+  edges.forEach(e => {
     const sid = typeof e.source === 'object' ? e.source.id : e.source;
     const tid = typeof e.target === 'object' ? e.target.id : e.target;
     if (sid === SELECTED.id) s.add(tid);
@@ -859,8 +949,13 @@ function draw() {
   const activeSemanticQ = VIEW === 'implicit'
     ? (document.getElementById('q3-semantic')?.value?.trim() || '')
     : '';
-  const nbs     = activeSemanticQ ? null : nbSet();
-  const focusId = HOVER ? HOVER.id : (SELECTED ? SELECTED.id : null);
+  const nbs = activeSemanticQ ? null : nbSet();
+  // All nodes that should show yellow: selected + hovered connection + open popup node
+  const highlightIds = new Set();
+  if (SELECTED)    highlightIds.add(SELECTED.id);
+  if (HOVER)       highlightIds.add(HOVER.id);
+  if (POPUP_NODE)  highlightIds.add(POPUP_NODE.id);
+  const focusId = HOVER ? HOVER.id : (SELECTED ? SELECTED.id : null); // for label drawing
 
   // --- edges ---
   CTX.lineCap = 'round';
@@ -911,20 +1006,34 @@ function draw() {
     CTX.stroke();
   }
 
+  // Draw RELATED_EDGES (from /api/related) — show live connections for selected node
+  if (VIEW === 'implicit' && SELECTED && RELATED_EDGES.length) {
+    for (const e of RELATED_EDGES) {
+      const s = NODE_MAP[typeof e.source === 'object' ? e.source.id : e.source];
+      const t = NODE_MAP[typeof e.target === 'object' ? e.target.id : e.target];
+      if (!s || !t || s.x == null || t.x == null) continue;
+      const hex = GROUP_COLORS[(s.group || 0) % GROUP_COLORS.length];
+      CTX.strokeStyle = hexAlpha(hex, 0.4 + e.score * 0.55);
+      CTX.lineWidth   = (0.8 + e.score * 1.2) / TRANSFORM.k;
+      CTX.beginPath(); CTX.moveTo(s.x, s.y); CTX.lineTo(t.x, t.y); CTX.stroke();
+    }
+  }
+
   // --- nodes ---
   for (const n of SIM_NODES) {
     if (n.x == null) continue;
-    const isFocus = focusId === n.id;
-    const isInNb  = nbs && nbs.has(n.id) && !isFocus;
+    if (n.is_case && n._deg === 0) continue; // hide isolated cases — no precomputed edge above floor
+    const isSelectedNode = SELECTED && n.id === SELECTED.id;
+    const isFocus = highlightIds.has(n.id);
     const dimmed  = nbs
       ? (!nbs.has(n.id) && !isFocus)
       : (QUERY_FOCUS_IDS ? (!QUERY_FOCUS_IDS.has(n.id) && !isFocus) : false);
-    const r2 = n.r * (isFocus ? 1.55 : 1);
+    const r2 = n.r * (isSelectedNode ? 1.55 : isFocus ? 1.2 : 1);
 
     if (isFocus) {
       CTX.beginPath();
-      CTX.arc(n.x, n.y, r2 + 5, 0, Math.PI * 2);
-      CTX.fillStyle = 'rgba(245,197,24,0.2)';
+      CTX.arc(n.x, n.y, r2 + (isSelectedNode ? 5 : 3), 0, Math.PI * 2);
+      CTX.fillStyle = isSelectedNode ? 'rgba(214,40,40,0.18)' : 'rgba(245,197,24,0.2)';
       CTX.fill();
     }
 
@@ -934,13 +1043,12 @@ function draw() {
 
     CTX.beginPath();
     if (n.is_case) {
-      // square for cases
       const s2 = r2 * 1.35;
       CTX.rect(n.x - s2, n.y - s2, s2 * 2, s2 * 2);
     } else {
       CTX.arc(n.x, n.y, r2, 0, Math.PI * 2);
     }
-    CTX.fillStyle = isFocus ? '#f5c518' : dimmed ? hexAlpha(baseColor, 0.25) : baseColor;
+    CTX.fillStyle = isSelectedNode ? '#d62828' : isFocus ? '#f5c518' : dimmed ? hexAlpha(baseColor, 0.25) : baseColor;
     CTX.fill();
 
     if (isFocus) {
@@ -950,12 +1058,13 @@ function draw() {
     }
   }
 
-  // --- labels for focused node + neighbours ---
-  if (focusId !== null && TRANSFORM.k > 0.55) {
+  // --- labels for all highlighted nodes ---
+  if (highlightIds.size > 0 && TRANSFORM.k > 0.55) {
     CTX.font = `${11 / TRANSFORM.k}px 'IBM Plex Sans', sans-serif`;
     CTX.textAlign    = 'left';
     CTX.textBaseline = 'middle';
     const drawLbl = n => {
+      if (!n || n.x == null) return;
       const lbl = trunc(n.label || n.id, 32);
       const x   = n.x + (n.is_case ? n.r * 1.35 : n.r) + 5 / TRANSFORM.k;
       const y   = n.y;
@@ -965,8 +1074,10 @@ function draw() {
       CTX.fillStyle = '#14181f';
       CTX.fillText(lbl, x + 2 / TRANSFORM.k, y);
     };
-    if (HOVER) drawLbl(HOVER);
-    if (SELECTED && SELECTED !== HOVER) drawLbl(SELECTED);
+    const seen = new Set();
+    for (const n of [HOVER, POPUP_NODE, SELECTED]) {
+      if (n && !seen.has(n.id)) { seen.add(n.id); drawLbl(n); }
+    }
   }
 
   CTX.restore();
@@ -980,6 +1091,21 @@ function hexAlpha(hex, a) {
 }
 
 function trunc(s, n) { return s && s.length > n ? s.slice(0, n - 1) + '…' : (s || ''); }
+
+// Resolve a node by display id (NODE_MAP key) or corpus_id (ECLI).
+// Cases are keyed in NODE_MAP by shared case number; CORPUS_ID_MAP handles the ECLI fallback in O(1).
+function resolveNode(id) {
+  if (!id) return null;
+  return NODE_MAP[id] || CORPUS_ID_MAP[id] || null;
+}
+
+// Rebuild CORPUS_ID_MAP whenever SIM_NODES / NODE_MAP changes.
+function rebuildCorpusIdMap() {
+  CORPUS_ID_MAP = {};
+  for (const n of SIM_NODES) {
+    if (n.corpus_id && n.corpus_id !== n.id) CORPUS_ID_MAP[n.corpus_id] = n;
+  }
+}
 
 // ================================================================
 // Interaction
@@ -1060,6 +1186,10 @@ function wireEvents() {
       closePanel();
       SELECTED = null; HOVER = null;
       QUERY_FOCUS_IDS = null; IMPLICIT_QUERY = ''; QUERY_BEST_CHUNKS = {};
+      // Also reset the semantic search UI so stale query chip never persists across view switches
+      document.getElementById('q3-semantic').value = '';
+      document.getElementById('res3-semantic').innerHTML = '';
+      document.getElementById('queryChip').classList.remove('active');
       updateStats();
       buildView();
     });
@@ -1090,6 +1220,18 @@ function wireEvents() {
       document.querySelectorAll('.pbody section').forEach(s => s.classList.remove('active'));
       b.classList.add('active');
       document.getElementById('tab-' + b.dataset.tab).classList.add('active');
+      // Re-apply chunk scroll when Full Text tab becomes visible —
+      // getBoundingClientRect() returns zeros on hidden sections so the
+      // initial scrollToChunkIn call (while tab was hidden) lands at the top.
+      if (b.dataset.tab === 'fulltext' && SELECTED) {
+        const chunk = QUERY_BEST_CHUNKS[SELECTED.id] || QUERY_BEST_CHUNKS[SELECTED.corpus_id] || '';
+        const mdBody = document.querySelector('#tab-fulltext .md-body');
+        const ftScrollEl = document.querySelector('.pbody');
+        if (chunk && mdBody && ftScrollEl) {
+          mdBody.querySelectorAll('[style*="background"]').forEach(el => el.style.background = '');
+          setTimeout(() => scrollToChunkIn(ftScrollEl, chunk), 30);
+        }
+      }
     });
   });
 
@@ -1120,6 +1262,8 @@ function wireEvents() {
     if (VIEW === 'implicit' && SIM_NODES.length) rebuildImplicitEdges();
     else document.getElementById('simLbl').textContent =
       (+document.getElementById('simSlider').value).toFixed(2);
+    // Update matching_chunks threshold for any open dropdowns
+    document.querySelectorAll('.nb-chunks[data-loaded]').forEach(el => delete el.dataset.loaded);
   });
 }
 
@@ -1131,6 +1275,7 @@ function pick(x, y) {
   let best = null, bd2 = Infinity;
   for (const n of SIM_NODES) {
     if (n.x == null) continue;
+    if (n.is_case && n._deg === 0) continue; // not visible — skip hit-test
     const dx = n.x - x, dy = n.y - y;
     const d2 = dx * dx + dy * dy;
     const hit = n.is_case ? (n.r * 1.35 + 4) ** 2 : (n.r + 3) ** 2;
@@ -1172,13 +1317,29 @@ async function doSemanticSearch(term) {
       body: JSON.stringify({query: term, threshold: SEMANTIC_THRESHOLD})
     });
     const d = await r.json();
-    // Include all results that have a node in the current view (laws + cases)
-    const results = (d.results || []).filter(x => NODE_MAP[x.parent_id]);
-    QUERY_FOCUS_IDS = results.length ? new Set(results.map(x => x.parent_id)) : null;
+    // Include all results that have a node in the current view (laws + cases).
+    // resolveNode handles cases where parent_id is the ECLI but NODE_MAP keys by shared case number.
+    const results = (d.results || []).filter(x => resolveNode(x.parent_id));
 
-    // Cache best chunk text per parent_id (used in Full Text tab when node is clicked)
+    // QUERY_FOCUS_IDS must contain the NODE_MAP key (n.id) so draw()'s has() check works.
+    // Also add parent_id as alias so QUERY_BEST_CHUNKS lookups survive ID mismatches.
+    QUERY_FOCUS_IDS = results.length ? new Set(
+      results.flatMap(x => {
+        const node = resolveNode(x.parent_id);
+        return node ? [x.parent_id, node.id] : [x.parent_id];
+      })
+    ) : null;
+
     QUERY_BEST_CHUNKS = {};
-    results.forEach(x => { if (x.best_chunk_text) QUERY_BEST_CHUNKS[x.parent_id] = x.best_chunk_text; });
+    results.forEach(x => {
+      if (!x.best_chunk_text) return;
+      QUERY_BEST_CHUNKS[x.parent_id] = x.best_chunk_text;
+      const node = resolveNode(x.parent_id);
+      if (node && node.id !== x.parent_id) QUERY_BEST_CHUNKS[node.id] = x.best_chunk_text;
+      if (node && node.corpus_id && node.corpus_id !== x.parent_id) QUERY_BEST_CHUNKS[node.corpus_id] = x.best_chunk_text;
+    });
+
+    IMPLICIT_QUERY = term;
 
     // Show the query chip
     document.getElementById('queryChipText').textContent = term;
@@ -1190,8 +1351,8 @@ async function doSemanticSearch(term) {
       out.innerHTML = results.map((x, i) => {
         const isCase   = x.source === 'caselaw';
         const friendly = KNOWN_LAWS[x.parent_id];
-        const n        = NODE_MAP[x.parent_id];
-        const lbl      = friendly || (n ? (n.label || n.name) : x.parent_id);
+        const node     = resolveNode(x.parent_id);
+        const lbl      = friendly || (node ? (node.label || node.name) : (x.title || x.parent_id));
         const display  = friendly
           ? `<b style="color:var(--gold)">${esc(friendly)}</b>`
           : esc(trunc(lbl, 30));
@@ -1206,8 +1367,10 @@ async function doSemanticSearch(term) {
       }).join('');
       out.querySelectorAll('.result-row').forEach(row => {
         row.addEventListener('click', () => {
-          const n = NODE_MAP[row.dataset.id];
-          if (n) selectAndCenter(n);
+          const n = resolveNode(row.dataset.id);
+          if (!n) return;
+          selectAndCenter(n);
+          document.querySelector('.tab-btn[data-tab="fulltext"]')?.click();
         });
       });
     }
@@ -1287,9 +1450,12 @@ function renderResults(containerId, pool, mode) {
 function selectAndCenter(n) {
   if (!n || n.x == null) return;
   selectNode(n);
-  const rect = CV.parentElement.getBoundingClientRect();
-  const k    = Math.max(TRANSFORM.k, 1.2);
-  TRANSFORM  = d3.zoomIdentity.translate(rect.width / 2 - n.x * k, rect.height / 2 - n.y * k).scale(k);
+  const rect      = CV.parentElement.getBoundingClientRect();
+  const panelOpen = document.getElementById('panel').classList.contains('open');
+  const panelW    = panelOpen ? Math.min(500, rect.width * 0.9) : 0;
+  const visW      = rect.width - panelW;
+  const k         = Math.max(TRANSFORM.k, 1.2);
+  TRANSFORM  = d3.zoomIdentity.translate(visW / 2 - n.x * k, rect.height / 2 - n.y * k).scale(k);
   if (ZOOM_BEHAVIOR) d3.select(CV).call(ZOOM_BEHAVIOR.transform, TRANSFORM);
   draw();
 }
@@ -1297,7 +1463,7 @@ function selectAndCenter(n) {
 // ================================================================
 // Detail panel
 // ================================================================
-function selectNode(n) {
+function selectNode(n, { skipFulltext = false } = {}) {
   SELECTED = n;
   document.getElementById('pType').textContent = n.is_case ? 'Case' : 'Law';
 
@@ -1344,64 +1510,217 @@ function selectNode(n) {
   }
 
   // Connections tab
-  const conns = SIM_EDGES.filter(e => {
-    const sid = typeof e.source === 'object' ? e.source.id : e.source;
-    const tid = typeof e.target === 'object' ? e.target.id : e.target;
-    return sid === n.id || tid === n.id;
-  });
-  document.getElementById('cConn').textContent = conns.length;
-
   const connEl = document.getElementById('tab-connections');
-  if (!conns.length) {
-    connEl.innerHTML = '<div class="empty-state"><div class="icon">[—]</div><p>No connections visible under current filters.</p></div>';
+
+  if (VIEW === 'implicit') {
+    // Live fetch from /api/related — same formula as the notebook (mean of query chunks vs all corpus chunks)
+    const displayed = +(document.getElementById('simSlider')?.value || 0.85);
+    const threshold = sliderToThreshold(displayed);
+    const docId = n.corpus_id || n.id;
+
+    document.getElementById('cConn').textContent = '…';
+    connEl.innerHTML = '<div class="empty-state"><div class="icon">[…]</div><p>Loading…</p></div>';
+
+    fetch(`/api/related?doc_id=${encodeURIComponent(docId)}&threshold=${threshold}`)
+      .then(r => r.json())
+      .then(data => {
+        if (SELECTED !== n) return; // node changed while loading
+        const results = data.results || [];
+        document.getElementById('cConn').textContent = results.length;
+
+        if (!results.length) {
+          connEl.innerHTML = '<div class="empty-state"><div class="icon">[—]</div><p>No connections visible under current filters.</p></div>';
+          return;
+        }
+
+        const hasCase    = results.some(x => x.source === 'caselaw');
+        const hasLaw     = results.some(x => x.source === 'legislation');
+        const showFilter = hasCase && hasLaw;
+
+        const filterBar = showFilter
+          ? `<div class="conn-filter-bar">
+               <button class="conn-chip active" data-filter="all">All</button>
+               <button class="conn-chip" data-filter="law">Laws</button>
+               <button class="conn-chip" data-filter="case">Cases</button>
+             </div>`
+          : '';
+
+        // Build RELATED_EDGES for canvas: one entry per result whose node is in NODE_MAP
+        RELATED_EDGES = results
+          .map(x => {
+            const t = resolveNode(x.parent_id);
+            return t ? { source: n.id, target: t.id, score: x.score, is_case_edge: x.source === 'caselaw' } : null;
+          })
+          .filter(Boolean);
+        draw();
+
+        connEl.innerHTML = filterBar + results.slice(0, 100).map((x, i) => {
+          const corpusId = x.parent_id;
+          const resolved = resolveNode(corpusId);
+          // Use the NODE_MAP key as data-id so canvas hover works; store corpus_id separately for fulltext
+          const displayId = resolved ? resolved.id : corpusId;
+          const isCase = x.source === 'caselaw';
+          const lbl    = x.title || x.shared_num || corpusId;
+          const pct    = Math.round(x.score * 100);
+          const qid    = n.id;
+          return `<div class="nb-row" data-id="${esc(displayId)}" data-corpus-id="${esc(corpusId)}" data-is-case="${isCase}" data-label="${esc(x.shared_num || corpusId)}" data-name="${esc(lbl)}" data-score="${x.score}">
+            <div class="nb-rank">${String(i + 1).padStart(2, '0')}</div>
+            <div class="nb-body">
+              <div class="nb-name" data-tt="${esc(lbl)}">${esc(trunc(lbl, 42))}</div>
+              <div class="nb-celex">${esc(corpusId)}</div>
+            </div>
+            <div class="nb-bar"><div style="width:${pct}%"></div></div>
+            <div class="nb-sc">${x.score.toFixed(3)}</div>
+            <button class="nb-expand" data-qid="${esc(qid)}" data-did="${esc(corpusId)}" title="Show matching chunks">▶</button>
+          </div>
+          <div class="nb-chunks" data-qid="${esc(qid)}" data-did="${esc(corpusId)}">
+            <div class="nb-chunk-row"><span class="nb-chunk-sc"></span><span class="nb-chunk-txt" style="color:var(--muted)">Click ▶ to load matching chunks</span></div>
+          </div>`;
+        }).join('');
+
+        if (showFilter) {
+          connEl.querySelectorAll('.conn-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+              connEl.querySelectorAll('.conn-chip').forEach(c => c.classList.remove('active'));
+              chip.classList.add('active');
+              const f = chip.dataset.filter;
+              connEl.querySelectorAll('.nb-row').forEach(row => {
+                const rowIsCase = row.dataset.isCase === 'true';
+                const show = f === 'all' || (f === 'case' && rowIsCase) || (f === 'law' && !rowIsCase);
+                row.style.display = show ? '' : 'none';
+                const chunks = row.nextElementSibling;
+                if (chunks?.classList.contains('nb-chunks') && !show) chunks.style.display = 'none';
+              });
+            });
+          });
+        }
+
+        connEl.querySelectorAll('.nb-expand').forEach(btn => {
+          btn.addEventListener('click', ev => {
+            ev.stopPropagation();
+            const chunksEl = btn.closest('.nb-row').nextElementSibling;
+            if (!chunksEl?.classList.contains('nb-chunks')) return;
+            const isOpen = btn.classList.toggle('open');
+            chunksEl.style.display = isOpen ? 'block' : 'none';
+            if (!isOpen || chunksEl.dataset.loaded) return;
+            chunksEl.dataset.loaded = '1';
+            const disp      = parseFloat(document.getElementById('simSlider').value) || 0.85;
+            const sliderThr = sliderToThreshold(disp);
+            // Cap at just below the row's connection score so the best chunk always shows
+            const rowScore  = parseFloat(btn.closest('.nb-row')?.dataset.score) || 1;
+            const thr       = Math.min(sliderThr, rowScore - 0.001);
+            fetch(`/api/matching_chunks?query_id=${encodeURIComponent(btn.dataset.qid)}&doc_id=${encodeURIComponent(btn.dataset.did)}&threshold=${thr}`)
+              .then(r => r.json())
+              .then(d => {
+                const chunks = d.chunks || [];
+                if (!chunks.length) {
+                  chunksEl.innerHTML = '<div class="nb-chunk-row"><span class="nb-chunk-sc"></span><span class="nb-chunk-txt" style="color:var(--muted)">No chunks above threshold.</span></div>';
+                  return;
+                }
+                chunksEl.innerHTML = chunks.map(c => {
+                  const preview = c.text.length > 320 ? c.text.slice(0, 320).trimEnd() + ' …' : c.text;
+                  return `<div class="nb-chunk-row">
+                    <span class="nb-chunk-sc">${c.score.toFixed(3)}</span>
+                    <span class="nb-chunk-txt">${esc(preview)}</span>
+                  </div>`;
+                }).join('');
+              })
+              .catch(() => {
+                chunksEl.innerHTML = '<div class="nb-chunk-row"><span class="nb-chunk-sc"></span><span class="nb-chunk-txt" style="color:var(--muted)">Error loading chunks.</span></div>';
+              });
+          });
+        });
+
+        connEl.querySelectorAll('.nb-row').forEach(row => {
+          row.addEventListener('mouseenter', () => {
+            // data-id is the NODE_MAP key (display id); resolveNode handles corpus_id fallback
+            const oth = NODE_MAP[row.dataset.id] || resolveNode(row.dataset.corpusId);
+            if (oth) { HOVER = oth; draw(); }
+          });
+          row.addEventListener('mouseleave', () => { HOVER = null; draw(); });
+          row.addEventListener('click', () => {
+            const oth = NODE_MAP[row.dataset.id] || resolveNode(row.dataset.corpusId) || {
+              id:        row.dataset.id,
+              corpus_id: row.dataset.corpusId || row.dataset.id,
+              label:     row.dataset.label,
+              name:      row.dataset.name,
+              is_case:   row.dataset.isCase === 'true',
+            };
+            openRelatedPopup(oth, SELECTED ? SELECTED.id : null);
+          });
+        });
+      })
+      .catch(() => {
+        if (SELECTED !== n) return;
+        document.getElementById('cConn').textContent = '!';
+        connEl.innerHTML = '<div class="empty-state"><div class="icon">[—]</div><p>Could not load — is server.py running?</p></div>';
+      });
+
   } else {
-    const isImplicit = VIEW === 'implicit';
-    const sorted = isImplicit
-      ? [...conns].sort((a, b) => (b.score || 0) - (a.score || 0))
-      : conns;
-    connEl.innerHTML = sorted.slice(0, 40).map((e, i) => {
-      const sid   = typeof e.source === 'object' ? e.source.id : e.source;
-      const tid   = typeof e.target === 'object' ? e.target.id : e.target;
-      const othId = sid === n.id ? tid : sid;
-      const oth   = NODE_MAP[othId];
-      const lbl   = oth ? (oth.label || oth.id) : othId;
-      if (isImplicit && e.score != null) {
-        const pct = Math.round(e.score * 100);
-        return `<div class="nb-row" data-id="${esc(othId)}">
+    // Non-implicit views: filter precomputed SIM_EDGES
+    const conns = SIM_EDGES.filter(e => {
+      const sid = typeof e.source === 'object' ? e.source.id : e.source;
+      const tid = typeof e.target === 'object' ? e.target.id : e.target;
+      return sid === n.id || tid === n.id;
+    });
+    document.getElementById('cConn').textContent = conns.length;
+
+    if (!conns.length) {
+      connEl.innerHTML = '<div class="empty-state"><div class="icon">[—]</div><p>No connections visible under current filters.</p></div>';
+    } else {
+      const filterBar = `<div class="conn-filter-bar">
+           <button class="conn-chip active" data-filter="all">All</button>
+           <button class="conn-chip" data-filter="law">Laws</button>
+           <button class="conn-chip" data-filter="case">Cases</button>
+         </div>`;
+
+      connEl.innerHTML = filterBar + conns.map((e, i) => {
+        const sid   = typeof e.source === 'object' ? e.source.id : e.source;
+        const tid   = typeof e.target === 'object' ? e.target.id : e.target;
+        const othId = sid === n.id ? tid : sid;
+        const oth   = NODE_MAP[othId];
+        const lbl   = oth ? (oth.label || oth.id) : othId;
+        const isCase = !!(oth && oth.is_case);
+        const col = EDGE_COLOR[e.type] || '#888';
+        const sc  = e.shared_count ? ` (×${e.shared_count})` : '';
+        return `<div class="nb-row" data-id="${esc(othId)}" data-is-case="${isCase}">
           <div class="nb-rank">${String(i + 1).padStart(2, '0')}</div>
           <div class="nb-body">
-            <div class="nb-name">${esc(trunc(lbl, 42))}</div>
+            <div class="nb-name" data-tt="${esc(lbl)}">${esc(trunc(lbl, 42))}</div>
             <div class="nb-celex">${esc(othId)}</div>
           </div>
-          <div class="nb-bar"><div style="width:${pct}%"></div></div>
-          <div class="nb-sc">${e.score.toFixed(3)}</div>
+          <div class="nb-type" style="background:${col}">${esc(EDGE_LABEL[e.type] || e.type)}${esc(sc)}</div>
         </div>`;
-      }
-      const col = EDGE_COLOR[e.type] || '#888';
-      const sc  = e.shared_count ? ` (×${e.shared_count})` : '';
-      return `<div class="nb-row" data-id="${esc(othId)}">
-        <div class="nb-rank">${String(i + 1).padStart(2, '0')}</div>
-        <div class="nb-body">
-          <div class="nb-name">${esc(trunc(lbl, 42))}</div>
-          <div class="nb-celex">${esc(othId)}</div>
-        </div>
-        <div class="nb-type" style="background:${col}">${esc(EDGE_LABEL[e.type] || e.type)}${esc(sc)}</div>
-      </div>`;
-    }).join('');
-    connEl.querySelectorAll('.nb-row').forEach(row => {
-      row.addEventListener('click', () => {
-        const oth = NODE_MAP[row.dataset.id];
-        if (!oth) return;
-        if (VIEW === 'implicit') {
-          // Open a popup showing the related law's text — keep the current selected node
-          openRelatedPopup(oth, SELECTED ? SELECTED.id : null);
-        } else {
-          // Explicit views: navigate to the connected node as before
-          selectAndCenter(oth);
-        }
+      }).join('');
+
+      connEl.querySelectorAll('.conn-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          connEl.querySelectorAll('.conn-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          const f = chip.dataset.filter;
+          connEl.querySelectorAll('.nb-row').forEach(row => {
+            const rowIsCase = row.dataset.isCase === 'true';
+            const show = f === 'all' || (f === 'case' && rowIsCase) || (f === 'law' && !rowIsCase);
+            row.style.display = show ? '' : 'none';
+          });
+        });
       });
-    });
+
+      connEl.querySelectorAll('.nb-row').forEach(row => {
+        row.addEventListener('mouseenter', () => {
+          const oth = NODE_MAP[row.dataset.id];
+          if (oth) { HOVER = oth; draw(); }
+        });
+        row.addEventListener('mouseleave', () => { HOVER = null; draw(); });
+        row.addEventListener('click', () => {
+          const oth = NODE_MAP[row.dataset.id];
+          if (oth) selectAndCenter(oth);
+        });
+      });
+    }
   }
+
+  if (skipFulltext) { document.getElementById('panel').classList.add('open'); draw(); return; }
 
   // Full text tab — fetch live from server.py
   const ftEl = document.getElementById('tab-fulltext');
@@ -1422,10 +1741,13 @@ function selectNode(n) {
         : '';
       ftEl.innerHTML = `<div class="md-body">${html}</div>${eurlexLink}`;
       const mdBody = ftEl.querySelector('.md-body');
-      // If semantic query is active, scroll to + highlight the most relevant paragraph
-      const activeSemanticQ = document.getElementById('q3-semantic')?.value?.trim();
-      if (mdBody && activeSemanticQ && QUERY_BEST_CHUNKS[n.id]) {
-        scrollToChunkIn(mdBody, QUERY_BEST_CHUNKS[n.id]);
+      const chunk = QUERY_BEST_CHUNKS[n.id] || QUERY_BEST_CHUNKS[n.corpus_id] || '';
+      // .pbody is the overflow-y:auto container; .md-body has no overflow so scrollTo() is a no-op on it
+      const ftScrollEl = ftEl.closest('.pbody') || ftEl.parentElement;
+      if (mdBody && chunk) {
+        const ftVisible = ftEl.classList.contains('active');
+        if (ftVisible) scrollToChunkIn(ftScrollEl, chunk);
+        // If tab is hidden, scroll is re-applied when user clicks Full Text tab (see wireEvents)
       }
       if (IMPLICIT_QUERY) highlightText(ftEl, IMPLICIT_QUERY);
     })
@@ -1448,6 +1770,7 @@ function tagGroup(label, tags) {
 function closePanel() {
   document.getElementById('panel').classList.remove('open');
   SELECTED = null;
+  RELATED_EDGES = [];
   draw();
 }
 
@@ -1467,15 +1790,21 @@ function clearSemanticQuery() {
 function openRelatedPopup(othNode, fromId) {
   const popup = document.getElementById('ctxPopup');
   document.getElementById('ctxPopupType').textContent = othNode.is_case ? 'Related Case' : 'Related Law';
-  document.getElementById('ctxPopupTitle').textContent =
-    (othNode.is_case ? (othNode.case_name || othNode.name || othNode.label) : (KNOWN_LAWS[othNode.id] || othNode.name || othNode.label)) || othNode.id;
+  const popupTitle = (othNode.is_case ? (othNode.case_name || othNode.name || othNode.label) : (KNOWN_LAWS[othNode.id] || othNode.name || othNode.label)) || othNode.id;
+  const titleEl = document.getElementById('ctxPopupTitle');
+  titleEl.textContent = popupTitle;
+  titleEl.setAttribute('data-tt', popupTitle);
   document.getElementById('ctxPopupCelex').textContent = (othNode.is_case && othNode.label !== othNode.id) ? othNode.label : othNode.id;
   const body = document.getElementById('ctxPopupBody');
   body.innerHTML = '<div class="empty-state"><div class="icon">[…]</div><p>Loading…</p></div>';
+  POPUP_NODE = NODE_MAP[othNode.id] || othNode;
+  draw();
   popup.classList.add('open');
 
   const src = othNode.is_case ? 'caselaw' : 'legislation';
-  fetch(`/api/fulltext?parent_id=${encodeURIComponent(othNode.id)}&source=${src}`)
+  // For cases the node.id may be the shared case number (e.g. "C-233/23"); corpus_id is the ECLI
+  const fulltextId = othNode.is_case ? (othNode.corpus_id || othNode.id) : othNode.id;
+  fetch(`/api/fulltext?parent_id=${encodeURIComponent(fulltextId)}&source=${src}`)
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(d => {
       if (!d.text) {
@@ -1489,7 +1818,13 @@ function openRelatedPopup(othNode, fromId) {
         : '';
       body.innerHTML = `<div class="md-body">${marked.parse(d.text)}</div>${eurlexLink}`;
       if (fromId && fromId !== othNode.id) {
-        fetch(`/api/best_chunk?law_a=${encodeURIComponent(fromId)}&law_b=${encodeURIComponent(othNode.id)}`)
+        // For cases: label holds the shared base case number (e.g. "C-268/21")
+        // which matches shared_num in _docs — most reliable key across all ID formats.
+        // For laws: id is the CELEX which is the corpus parent_id directly.
+        const bestChunkId = othNode.is_case
+          ? (othNode.label && othNode.label !== othNode.id ? othNode.label : (othNode.corpus_id || othNode.id))
+          : (othNode.corpus_id || othNode.id);
+        fetch(`/api/best_chunk?law_a=${encodeURIComponent(fromId)}&law_b=${encodeURIComponent(bestChunkId)}`)
           .then(r => r.ok ? r.json() : null)
           .then(d => { if (d && d.best_chunk) scrollToChunkIn(body, d.best_chunk); });
       }
@@ -1501,22 +1836,74 @@ function openRelatedPopup(othNode, fromId) {
 
 function closePopup() {
   document.getElementById('ctxPopup').classList.remove('open');
+  POPUP_NODE = null;
+  draw();
 }
 
 function scrollToChunkIn(container, chunkText) {
   if (!chunkText) return;
-  const re = new RegExp(
-    chunkText.trim().slice(0, 40).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'
-  );
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  let found = null;
-  while (walker.nextNode()) {
-    if (re.test(walker.currentNode.textContent)) { found = walker.currentNode; break; }
+
+  // Normalize text the same way clean_legal_text() processes the fulltext:
+  // strip blockquote/bullet line-start markers, normalize Unicode quotes, collapse whitespace.
+  function norm(t) {
+    return t
+      .replace(/[\u2018\u2019\u2032]/g, "'")
+      .replace(/[\u201c\u201d]/g, '"')
+      .replace(/[\u2013\u2014]/g, '-')
+      .replace(/^\s*[>*\-]\s*/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
-  if (!found) return;
-  const el = found.parentElement;
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  el.style.background = '#ffe066';  // yellow highlight — stays until popup closes
+
+  const clean = norm(chunkText);
+  const chunkLen = clean.length;
+
+  // Use top-level children of .md-body so each unit is a whole paragraph or blockquote,
+  // avoiding double-matching nested <p> inside <blockquote>.
+  const mdBody = container.querySelector('.md-body') || container;
+  const blocks = Array.from(mdBody.children);
+  if (!blocks.length) return;
+
+  function highlightFrom(startIdx) {
+    const el = blocks[startIdx];
+    const elRect = el.getBoundingClientRect();
+    const cRect  = container.getBoundingClientRect();
+    const targetTop = container.scrollTop + elRect.top - cRect.top - 40;
+    container.scrollTo({ top: targetTop, behavior: 'smooth' });
+    // Highlight the matched block and enough subsequent siblings to cover the full chunk.
+    let covered = 0;
+    for (let i = startIdx; i < blocks.length && covered < chunkLen; i++) {
+      blocks[i].style.background = '#ffe066';
+      covered += norm(blocks[i].textContent).length;
+    }
+  }
+
+  // Strategy 1: sliding 25-char anchors every 20 chars across first 200 chars of chunk
+  for (let start = 0; start < Math.min(clean.length - 15, 200); start += 20) {
+    const anchor = clean.slice(start, start + 25).trim();
+    if (anchor.length < 12) continue;
+    const re = new RegExp(anchor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    for (let i = 0; i < blocks.length; i++) {
+      if (re.test(norm(blocks[i].textContent))) {
+        highlightFrom(i);
+        return;
+      }
+    }
+  }
+
+  // Strategy 2: find block with most matching significant words from the chunk
+  const words = clean.toLowerCase().match(/\b[a-z]{5,}\b/g) || [];
+  const keyWords = [...new Set(words)].slice(0, 15);
+  if (!keyWords.length) return;
+  let bestIdx = -1, bestScore = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    const t = norm(blocks[i].textContent).toLowerCase();
+    const score = keyWords.filter(w => t.includes(w)).length;
+    if (score > bestScore) { bestScore = score; bestIdx = i; }
+  }
+  if (bestIdx >= 0 && bestScore >= 3) {
+    highlightFrom(bestIdx);
+  }
 }
 
 function highlightText(container, query) {
