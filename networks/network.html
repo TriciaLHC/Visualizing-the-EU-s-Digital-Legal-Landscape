@@ -460,6 +460,17 @@ canvas.hover{cursor:pointer}
 
 <script>
 // ================================================================
+// Event logging — sends client-side interactions to server CSV
+// ================================================================
+function logEvent(eventType, data = {}) {
+  fetch('/api/log_event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event_type: eventType, ...data }),
+  }).catch(() => {});
+}
+
+// ================================================================
 // Config
 // ================================================================
 const EDGE_COLOR = {
@@ -1231,6 +1242,7 @@ function wireEvents() {
       document.querySelectorAll('.filter-section').forEach(f => f.classList.remove('active'));
       tab.classList.add('active');
       VIEW = tab.dataset.view;
+      logEvent('view_switch', { document_id: VIEW });
       document.getElementById('fs-' + VIEW).classList.add('active');
       closePanel();
       SELECTED = null; HOVER = null;
@@ -1248,6 +1260,7 @@ function wireEvents() {
   document.querySelectorAll('input[data-filter]').forEach(cb => {
     cb.addEventListener('change', () => {
       FILTERS[cb.dataset.filter] = cb.checked;
+      logEvent('filter_toggle', { document_id: cb.dataset.filter + '=' + cb.checked });
       SELECTED = null;
       buildView();
     });
@@ -1268,6 +1281,7 @@ function wireEvents() {
       document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
       document.querySelectorAll('.pbody section').forEach(s => s.classList.remove('active'));
       b.classList.add('active');
+      logEvent('panel_tab_switch', { document_id: b.dataset.tab + (SELECTED ? ':' + SELECTED.id : '') });
       document.getElementById('tab-' + b.dataset.tab).classList.add('active');
       // Re-apply chunk scroll when Full Text tab becomes visible —
       // getBoundingClientRect() returns zeros on hidden sections so the
@@ -1294,6 +1308,7 @@ function wireEvents() {
   document.getElementById('q3-semantic').addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       IMPLICIT_QUERY = e.target.value;
+      logEvent('semantic_search', { search_query: e.target.value });
       doSemanticSearch(e.target.value);
     }
   });
@@ -1311,6 +1326,7 @@ function wireEvents() {
       document.getElementById('semModeMidHigh').classList.remove('active');
       document.getElementById('semModeLowMid').classList.remove('active');
       document.getElementById(id).classList.add('active');
+      logEvent('similarity_mode', { document_id: id });
       document.getElementById('semModeDesc').textContent = MODE_DESCS[id];
       const current = document.getElementById('q3-semantic').value.trim();
       if (current) doSemanticSearch(current);
@@ -1557,6 +1573,7 @@ function selectAndCenter(n) {
 // ================================================================
 function selectNode(n, { skipFulltext = false } = {}) {
   SELECTED = n;
+  logEvent('node_click', { document_id: n.id, search_query: n.is_case ? 'case' : 'law' });
   document.getElementById('pType').textContent = n.is_case ? 'Case' : 'Law';
 
   if (VIEW === 'implicit') {
@@ -1875,6 +1892,7 @@ function tagGroup(label, tags) {
 }
 
 function closePanel() {
+  if (SELECTED) logEvent('close_panel', { document_id: SELECTED.id });
   document.getElementById('panel').classList.remove('open');
   SELECTED = null;
   RELATED_EDGES = [];
@@ -1895,6 +1913,7 @@ function clearSemanticQuery() {
 // Related-law popup (implicit view)
 // ================================================================
 function openRelatedPopup(othNode, fromId) {
+  logEvent('related_popup', { document_id: (fromId || '') + ' <> ' + othNode.id });
   const popup = document.getElementById('ctxPopup');
   document.getElementById('ctxPopupType').textContent = othNode.is_case ? 'Related Case' : 'Related Law';
   const popupTitle = (othNode.is_case ? (othNode.case_name || othNode.name || othNode.label) : (KNOWN_LAWS[othNode.id] || othNode.name || othNode.label)) || othNode.id;

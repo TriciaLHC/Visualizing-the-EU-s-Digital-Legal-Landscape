@@ -48,17 +48,33 @@ app = Flask(__name__)
 CORS(app)   # allow fetch from HTML file opened locally
 
 # CSV access log — saved to Google Drive if running in Colab, otherwise next to server.py
-_GDRIVE = Path("/content/drive/MyDrive")
+_GDRIVE = Path("/content/drive/MyDrive/CPDP_2026_thesis")
 LOG_PATH = (_GDRIVE / "eu_legal_access.csv") if _GDRIVE.exists() else (Path(__file__).parent / "access.csv")
 
 if not LOG_PATH.exists():
     with open(LOG_PATH, "w", newline="", encoding="utf-8") as _f:
-        csv.writer(_f).writerow(["timestamp", "ip", "method", "path", "status_code", "search_query", "search_threshold"])
+        csv.writer(_f).writerow(["timestamp", "ip", "method", "path", "status_code", "search_query", "search_threshold", "document_id"])
 
 
 @app.after_request
 def _log_and_patch(response):
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+
+    # Extract which document/law/case was accessed per endpoint
+    p = request.path
+    if p == "/api/fulltext":
+        doc_id = request.args.get("parent_id", "")
+    elif p == "/api/related":
+        doc_id = request.args.get("doc_id", "")
+    elif p == "/api/best_chunk":
+        law_a = request.args.get("law_a", "")
+        law_b = request.args.get("law_b", "")
+        doc_id = f"{law_a} <> {law_b}" if law_a and law_b else ""
+    elif p == "/api/matching_chunks":
+        doc_id = f"{request.args.get('query_id','')} <> {request.args.get('doc_id','')}"
+    else:
+        doc_id = ""
+
     with open(LOG_PATH, "a", newline="", encoding="utf-8") as _f:
         csv.writer(_f).writerow([
             datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -68,6 +84,7 @@ def _log_and_patch(response):
             response.status_code,
             g.get("search_query", ""),
             g.get("search_threshold", ""),
+            doc_id,
         ])
     response.headers["ngrok-skip-browser-warning"] = "true"
     return response
@@ -729,6 +746,24 @@ def _fulltext_fallback(parent_id: str, source: str) -> str:
         _fallback_cache[parent_id] = text
         print(f"  [fallback] found {parent_id} in full CSV")
     return text
+
+
+@app.route("/api/log_event", methods=["POST"])
+def api_log_event():
+    data = request.get_json(force=True) or {}
+    ip   = request.headers.get("X-Forwarded-For", request.remote_addr)
+    with open(LOG_PATH, "a", newline="", encoding="utf-8") as _f:
+        csv.writer(_f).writerow([
+            datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            ip,
+            "EVENT",
+            data.get("event_type", ""),
+            "",
+            data.get("search_query", ""),
+            data.get("search_threshold", ""),
+            data.get("document_id", ""),
+        ])
+    return jsonify({"ok": True})
 
 
 @app.route("/api/fulltext")
