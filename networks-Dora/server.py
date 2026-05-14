@@ -796,7 +796,7 @@ def api_case_names():
 
 
 # Entry point
-_DEFAULT_HTML = BASE_DIR / "networks" / "network.html"
+_DEFAULT_HTML = BASE_DIR / "network.html"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

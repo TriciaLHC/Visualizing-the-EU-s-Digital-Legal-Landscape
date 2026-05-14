@@ -229,6 +229,37 @@ canvas.hover{cursor:pointer}
 .search-hint{font-size:10.5px;color:#5d6477;margin:-4px 0 8px;font-family:'IBM Plex Mono',monospace;
   letter-spacing:.03em}
 
+/* ---- similarity mode toggle ---- */
+.sem-mode-row{display:flex;gap:5px;margin:8px 0 4px}
+.sem-mode-btn{flex:1;padding:7px 6px 6px;border-radius:5px;border:1px solid var(--sidebar-rule);
+  background:transparent;color:var(--muted);font:700 9.5px 'IBM Plex Sans',sans-serif;
+  letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:all .15s;
+  display:flex;flex-direction:column;align-items:center;gap:2px;line-height:1.25}
+.sem-mode-btn:hover:not(.active){background:rgba(255,255,255,.05);color:#cfd3dd}
+.sem-mode-btn.active{background:var(--gold-soft);border-color:var(--gold);color:var(--ink)}
+.sem-mode-btn .sem-mode-range{font-family:'IBM Plex Mono',monospace;font-size:9px;
+  letter-spacing:.02em;opacity:.8;margin-top:1px}
+.sem-mode-btn.active .sem-mode-range{color:var(--gold-2)}
+.sem-mode-btn#semModeLowMid.active{background:rgba(67,170,139,.12);border-color:#43aa8b;color:#43aa8b}
+.sem-mode-btn#semModeLowMid.active .sem-mode-range{color:#43aa8b}
+.sem-mode-desc{font-size:10px;color:#5d6477;font-family:'IBM Plex Mono',monospace;
+  letter-spacing:.02em;margin:0 0 8px;font-style:italic;line-height:1.4}
+
+/* ---- exclude-exact checkbox row ---- */
+.sem-exclude-row{display:flex;align-items:flex-start;gap:7px;margin:0 0 2px;cursor:pointer;user-select:none}
+.sem-exclude-row input[type=checkbox]{accent-color:var(--gold);width:13px;height:13px;
+  cursor:pointer;flex:none;margin-top:1px}
+.sem-exclude-label{font-size:11.5px;color:#cfd3dd;font-family:'IBM Plex Sans',sans-serif;line-height:1.35}
+.sem-exclude-hint{font-size:10px;color:#5d6477;font-family:'IBM Plex Mono',monospace;
+  letter-spacing:.02em;margin:1px 0 10px 20px;font-style:italic;line-height:1.4}
+
+/* low-mid score colour */
+.sc-lowmid{color:#43aa8b !important}
+/* section divider in results */
+.result-section-head{font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:#5d6477;padding:8px 0 3px;border-top:1px solid #232a3b;margin-top:4px}
+.result-section-head:first-child{border-top:none;margin-top:0;padding-top:2px}
+
 /* active-query chip (shown after pressing Enter in semantic search) */
 .query-chip{display:none;align-items:center;gap:6px;
   background:#1e2538;border:1px solid var(--gold);
@@ -324,6 +355,23 @@ canvas.hover{cursor:pointer}
       <input id="q3-semantic" type="text" placeholder="e.g. AI transparency obligations…" autocomplete="off">
     </div>
     <div class="search-hint">↩ Enter → Find semantically similar laws and cases</div>
+
+    <div class="sem-mode-row">
+      <button class="sem-mode-btn active" id="semModeMidHigh" title="Results with cosine similarity above 0.50 — strongly related">
+        <span>Mid–High</span>
+        <span class="sem-mode-range">&gt; 0.50</span>
+      </button>
+      <button class="sem-mode-btn" id="semModeLowMid" title="Results with cosine similarity 0.30–0.50 — indirectly related">
+        <span>Low–Mid</span>
+        <span class="sem-mode-range">0.30 – 0.50</span>
+      </button>
+    </div>
+    <div class="sem-mode-desc" id="semModeDesc">Strongly similar — direct conceptual overlap</div>
+
+    <label class="sem-exclude-row">
+      <input type="checkbox" id="semExcludeExact">
+      <span class="sem-exclude-label">Exclude exact phrase matches</span>
+    </label>
     <div class="query-chip" id="queryChip">
       <span class="qc-text" id="queryChipText"></span>
       <button class="qc-x" onclick="clearSemanticQuery()" title="Clear search">×</button>
@@ -516,6 +564,7 @@ let QUERY_FOCUS_IDS   = null;   // Set of parent_ids from semantic search (dims 
 let QUERY_BEST_CHUNKS = {};     // {parent_id: best_chunk_text} from last semantic search
 let RELATED_EDGES     = [];     // edges built from last /api/related call — drives canvas + nbSet in implicit view
 let _relatedDebounce  = null;   // timer handle for debouncing /api/related refetch on slider move
+let _connFilter       = 'all';  // persists the active connections-tab filter chip across slider refreshes
 let CORPUS_ID_MAP     = {};     // corpus_id (ECLI) → node — O(1) fallback for resolveNode
 
 // ================================================================
@@ -1251,6 +1300,28 @@ function wireEvents() {
   document.getElementById('q3-semantic').addEventListener('input', e => {
     if (!e.target.value.trim()) { QUERY_FOCUS_IDS = null; draw(); }
   });
+
+  // Similarity mode toggle buttons
+  const MODE_DESCS = {
+    semModeMidHigh: 'Strongly similar — direct conceptual overlap',
+    semModeLowMid:  'Loosely related — indirect or thematic references',
+  };
+  ['semModeMidHigh', 'semModeLowMid'].forEach(id => {
+    document.getElementById(id).addEventListener('click', () => {
+      document.getElementById('semModeMidHigh').classList.remove('active');
+      document.getElementById('semModeLowMid').classList.remove('active');
+      document.getElementById(id).classList.add('active');
+      document.getElementById('semModeDesc').textContent = MODE_DESCS[id];
+      const current = document.getElementById('q3-semantic').value.trim();
+      if (current) doSemanticSearch(current);
+    });
+  });
+
+  // Exclude-exact checkbox re-runs the active query
+  document.getElementById('semExcludeExact').addEventListener('change', () => {
+    const current = document.getElementById('q3-semantic').value.trim();
+    if (current) doSemanticSearch(current);
+  });
   // Escape closes the related-law popup
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closePopup();
@@ -1306,23 +1377,42 @@ function doSearch3(term) {
 async function doSemanticSearch(term) {
   term = term.trim();
   if (!term) { QUERY_FOCUS_IDS = null; draw(); return; }
-  // Always search at 0.5 threshold — show all matches, regardless of the edge slider
-  const SEMANTIC_THRESHOLD = 0.5;
+
+  const isLowMid     = document.getElementById('semModeLowMid').classList.contains('active');
+  const excludeExact = document.getElementById('semExcludeExact').checked;
+  // Low-mid mode fetches from 0.3; mid-high from 0.5.
+  // Server already sorts descending, so band filtering on the client is cheap.
+  const fetchThreshold = isLowMid ? 0.3 : 0.5;
+
   const out = document.getElementById('res3-semantic');
   out.innerHTML = '<div class="result-empty">searching…</div>';
   try {
     const r = await fetch('/api/search', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({query: term, threshold: SEMANTIC_THRESHOLD})
+      body: JSON.stringify({query: term, threshold: fetchThreshold})
     });
     const d = await r.json();
-    // Include all results that have a node in the current view (laws + cases).
-    // resolveNode handles cases where parent_id is the ECLI but NODE_MAP keys by shared case number.
-    const results = (d.results || []).filter(x => resolveNode(x.parent_id));
 
-    // QUERY_FOCUS_IDS must contain the NODE_MAP key (n.id) so draw()'s has() check works.
-    // Also add parent_id as alias so QUERY_BEST_CHUNKS lookups survive ID mismatches.
+    // Keep only results visible in the current network view
+    let results = (d.results || []).filter(x => resolveNode(x.parent_id));
+
+    // Apply similarity band filter
+    if (isLowMid) {
+      results = results.filter(x => x.score >= 0.3 && x.score <= 0.5);
+    } else {
+      results = results.filter(x => x.score > 0.5);
+    }
+
+    // Exclude results whose best chunk contains the exact query phrase
+    if (excludeExact && term) {
+      const termLower = term.toLowerCase();
+      results = results.filter(x =>
+        !(x.best_chunk_text && x.best_chunk_text.toLowerCase().includes(termLower))
+      );
+    }
+
+    // QUERY_FOCUS_IDS must use NODE_MAP keys so draw()'s has() check works
     QUERY_FOCUS_IDS = results.length ? new Set(
       results.flatMap(x => {
         const node = resolveNode(x.parent_id);
@@ -1341,13 +1431,15 @@ async function doSemanticSearch(term) {
 
     IMPLICIT_QUERY = term;
 
-    // Show the query chip
     document.getElementById('queryChipText').textContent = term;
     document.getElementById('queryChip').classList.add('active');
 
     if (!results.length) {
-      out.innerHTML = '<div class="result-empty">no matches above 0.5</div>';
+      const rangeLabel = isLowMid ? '0.30–0.50' : 'above 0.50';
+      const extraNote  = excludeExact ? ' (after excluding exact matches)' : '';
+      out.innerHTML = `<div class="result-empty">no matches ${rangeLabel}${extraNote}</div>`;
     } else {
+      const scoreClass = isLowMid ? 'sc-lowmid' : '';
       out.innerHTML = results.map((x, i) => {
         const isCase   = x.source === 'caselaw';
         const friendly = KNOWN_LAWS[x.parent_id];
@@ -1362,7 +1454,7 @@ async function doSemanticSearch(term) {
           <span class="rn">${String(i+1).padStart(2,'0')}</span>
           <span class="rt" style="color:${typeCol}">${typeTag}</span>
           <span>${display}</span>
-          <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--gold)">${x.score.toFixed(3)}</span>
+          <span class="${scoreClass}" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;">${x.score.toFixed(3)}</span>
         </div>`;
       }).join('');
       out.querySelectorAll('.result-row').forEach(row => {
@@ -1579,11 +1671,26 @@ function selectNode(n, { skipFulltext = false } = {}) {
         }).join('');
 
         if (showFilter) {
+          // Restore previously-active filter (survives slider refreshes)
+          const activeChip = connEl.querySelector(`.conn-chip[data-filter="${_connFilter}"]`);
+          if (activeChip && _connFilter !== 'all') {
+            connEl.querySelectorAll('.conn-chip').forEach(c => c.classList.remove('active'));
+            activeChip.classList.add('active');
+            connEl.querySelectorAll('.nb-row').forEach(row => {
+              const rowIsCase = row.dataset.isCase === 'true';
+              const show = _connFilter === 'all' || (_connFilter === 'case' && rowIsCase) || (_connFilter === 'law' && !rowIsCase);
+              row.style.display = show ? '' : 'none';
+              const chunks = row.nextElementSibling;
+              if (chunks?.classList.contains('nb-chunks') && !show) chunks.style.display = 'none';
+            });
+          }
+
           connEl.querySelectorAll('.conn-chip').forEach(chip => {
             chip.addEventListener('click', () => {
               connEl.querySelectorAll('.conn-chip').forEach(c => c.classList.remove('active'));
               chip.classList.add('active');
               const f = chip.dataset.filter;
+              _connFilter = f;
               connEl.querySelectorAll('.nb-row').forEach(row => {
                 const rowIsCase = row.dataset.isCase === 'true';
                 const show = f === 'all' || (f === 'case' && rowIsCase) || (f === 'law' && !rowIsCase);
@@ -1621,7 +1728,7 @@ function selectNode(n, { skipFulltext = false } = {}) {
                   const preview = c.text.length > 320 ? c.text.slice(0, 320).trimEnd() + ' …' : c.text;
                   return `<div class="nb-chunk-row">
                     <span class="nb-chunk-sc">${c.score.toFixed(3)}</span>
-                    <span class="nb-chunk-txt">${esc(preview)}</span>
+                    <span class="nb-chunk-txt" data-tt="${esc(c.text)}" title="">${esc(preview)}</span>
                   </div>`;
                 }).join('');
               })
@@ -1670,8 +1777,8 @@ function selectNode(n, { skipFulltext = false } = {}) {
     } else {
       const filterBar = `<div class="conn-filter-bar">
            <button class="conn-chip active" data-filter="all">All</button>
-           <button class="conn-chip" data-filter="law">Laws</button>
-           <button class="conn-chip" data-filter="case">Cases</button>
+           <button class="conn-chip" data-filter="reasoning">Reasoning</button>
+           <button class="conn-chip" data-filter="operative">Operative</button>
          </div>`;
 
       connEl.innerHTML = filterBar + conns.map((e, i) => {
@@ -1683,7 +1790,8 @@ function selectNode(n, { skipFulltext = false } = {}) {
         const isCase = !!(oth && oth.is_case);
         const col = EDGE_COLOR[e.type] || '#888';
         const sc  = e.shared_count ? ` (×${e.shared_count})` : '';
-        return `<div class="nb-row" data-id="${esc(othId)}" data-is-case="${isCase}">
+        const edgeType = (e.type || '').toLowerCase();
+        return `<div class="nb-row" data-id="${esc(othId)}" data-is-case="${isCase}" data-edge-type="${esc(edgeType)}">
           <div class="nb-rank">${String(i + 1).padStart(2, '0')}</div>
           <div class="nb-body">
             <div class="nb-name" data-tt="${esc(lbl)}">${esc(trunc(lbl, 42))}</div>
@@ -1699,8 +1807,7 @@ function selectNode(n, { skipFulltext = false } = {}) {
           chip.classList.add('active');
           const f = chip.dataset.filter;
           connEl.querySelectorAll('.nb-row').forEach(row => {
-            const rowIsCase = row.dataset.isCase === 'true';
-            const show = f === 'all' || (f === 'case' && rowIsCase) || (f === 'law' && !rowIsCase);
+            const show = f === 'all' || row.dataset.edgeType === f;
             row.style.display = show ? '' : 'none';
           });
         });

@@ -97,9 +97,9 @@ def clean_legal_text(text: str) -> str:
     for marker in BOILERPLATE_HEADERS:
         pattern = re.compile(rf"(^|\n)#+\s*{re.escape(marker)}.*", re.IGNORECASE | re.DOTALL)
         text = pattern.sub("", text)
-        idx = text.lower().find(marker.lower())
-        if idx != -1:
-            text = text[:idx]
+        plain = re.search(rf'(?:^|\n)\s*{re.escape(marker)}\s*(?:\n|$)', text, re.IGNORECASE)
+        if plain:
+            text = text[:plain.start()]
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
     text = re.sub(r'https?://\S+', '', text)
     text = re.sub(r'\bby\s+\.', '', text)
