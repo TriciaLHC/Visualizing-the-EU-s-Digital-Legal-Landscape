@@ -45,19 +45,16 @@ from sklearn.metrics.pairwise import cosine_similarity
 app = Flask(__name__)
 CORS(app)   # allow fetch from HTML file opened locally
 
-BASE_DIR = Path(__file__).parent
-#parent of server is Thesis project root, which contains Data/ and corpus/ folders 
-# THESIS PROJECT/Data
-DATASET_DIR = BASE_DIR.parent / "Data"
-CORPUS_DIR = BASE_DIR.parent / "corpus"
-
-# CSV files
+# Paths
+BASE_DIR      = Path(__file__).parent
+CORPUS_DIR    = BASE_DIR / "corpus"
+DATASET_DIR   = BASE_DIR / "Data"
+# Shortlist CSVs — loaded fully into memory at startup (fast primary lookup)
 LAW_CSV_SHORT  = DATASET_DIR / "laws.csv"
 CASE_CSV_SHORT = DATASET_DIR / "cases.csv"
-
+# Full CSVs — same files; fallback scans them chunk-by-chunk for ids not in the in-memory lookup
 LAW_CSV_FULL   = DATASET_DIR / "laws.csv"
 CASE_CSV_FULL  = DATASET_DIR / "cases.csv"
-
 HTML_PATH      = None   # set from --html arg at startup (default below)
 
 DEFAULT_THRESHOLD = 0.50
@@ -77,6 +74,9 @@ _implicit_nodes   = []      # [{id, label, name, group, …}] law nodes
 _implicit_case_pairs = []   # [{source (case), target (law), score}] case-law semantic pairs
 _implicit_case_nodes = []   # [{id, label, name, is_case:True, …}] case nodes
 _explicit_pair_set = set()  # {(min_id, max_id)} explicit pairs to exclude
+_dense_normed     = None    # (n_chunks, dim) — all corpus chunk vectors, L2-normalised
+_law_names_cache  = None    # {celex: human_readable_name} — cached on first /api/law_names call
+_case_names_cache = None    # {case_number: case_name}    — cached on first /api/case_names call
 
 BOILERPLATE_HEADERS = [
     "MAIN DOCUMENT", "BACKGROUND", "FROM WHEN DOES",
@@ -202,6 +202,7 @@ def load_data(threshold: float):
 def _build_implicit_network():
     global _implicit_pairs, _implicit_nodes, _explicit_pair_set
     global _implicit_case_pairs, _implicit_case_nodes
+    global _dense_normed
 
     if _dense_vecs is None or _docs is None:
         return
@@ -210,10 +211,10 @@ def _build_implicit_network():
     explicit_node_map      = {}
     explicit_case_node_map = {}
     for candidate in [
-        BASE_DIR / "explicit_network_layout.json",
+        BASE_DIR / "explicit_network_layout.json",                 # prefer layout (has x,y)
         BASE_DIR / "explicit_network_data.json",
-        BASE_DIR / "networks"     / "explicit_network_layout.json",
-        BASE_DIR / "networks"     / "explicit_network_data.json",
+        BASE_DIR / "networks" / "explicit_network_layout.json",
+        BASE_DIR / "networks" / "explicit_network_data.json",
         BASE_DIR / "deliverables" / "explicit_network_layout.json",
         BASE_DIR / "deliverables" / "explicit_network_data.json",
     ]:
@@ -222,12 +223,19 @@ def _build_implicit_network():
             for e in ex.get("law_law_edges", []):
                 a, b = e["source"], e["target"]
                 _explicit_pair_set.add((min(a, b), max(a, b)))
+            # Also blacklist explicit case-law citations so they don't appear as
+            # implicit semantic edges too (same connection shown in two views).
+            _explicit_case_law_pairs = set()
+            for e in ex.get("case_law_edges", []):
+                _explicit_case_law_pairs.add((str(e["source"]), str(e["target"])))
             explicit_node_map      = {n["id"]: n for n in ex.get("law_nodes",  [])}
             explicit_case_node_map = {n["id"]: n for n in ex.get("case_nodes", [])}
-            print(f"  [implicit] {len(_explicit_pair_set)} explicit pairs blacklisted, "
+            print(f"  [implicit] {len(_explicit_pair_set)} explicit law-law pairs blacklisted, "
+                  f"{len(_explicit_case_law_pairs)} explicit case-law pairs blacklisted, "
                   f"{len(explicit_node_map)} law nodes, {len(explicit_case_node_map)} case nodes loaded")
             break
     else:
+        _explicit_case_law_pairs = set()
         print("  [implicit] explicit_network_data.json not found — blacklist skipped")
 
     # ── Law-law semantic similarity ───────────────────────────────────────
@@ -246,14 +254,44 @@ def _build_implicit_network():
     norms[norms == 0] = 1.0
     law_vecs /= norms
 
-    sim = (law_vecs @ law_vecs.T).astype(np.float32)
+    # Normalize all corpus chunk vectors once — reused by both law-law and case-law scoring
+    _norms_all = np.linalg.norm(_dense_vecs, axis=1, keepdims=True)
+    _norms_all[_norms_all == 0] = 1.0
+    dense_normed = (_dense_vecs / _norms_all).astype(np.float32)
+    _dense_normed = dense_normed   # persist for /api/related
 
+    # ── Chunk-level law-law scoring ───────────────────────────────────────────
+    # For each (law_i, law_j): score = max over chunks of law_i of (chunk · law_j_mean),
+    # then symmetrise by taking max of both directions.
     parent_ids = law_docs["parent_id"].tolist()
+    LAW_SCORE_FLOOR = 0.60
+
+    # Collect all law chunks into one matrix and track which law owns each
+    law_chunk_idx = []
+    law_chunk_owner = []
+    for i in range(n):
+        idxs = law_docs.iloc[i]["chunk_indices"]
+        law_chunk_idx.extend(idxs)
+        law_chunk_owner.extend([i] * len(idxs))
+
+    law_chunk_owner_arr = np.array(law_chunk_owner, dtype=np.int32)
+    all_law_chunks = dense_normed[law_chunk_idx]          # (total_law_chunks, dim)
+    chunk_law_sim  = (all_law_chunks @ law_vecs.T).astype(np.float32)  # (total_chunks, n_laws)
+
+    # Per-law max: law_law_max[i, j] = max sim of law_i's chunks vs law_j's mean
+    law_law_max = np.zeros((n, n), dtype=np.float32)
+    for i in range(n):
+        mask = law_chunk_owner_arr == i
+        if mask.any():
+            law_law_max[i] = chunk_law_sim[mask].max(axis=0)
+
+    sym_sim = np.maximum(law_law_max, law_law_max.T)  # symmetric
+
     pairs = []
     for i in range(n):
         for j in range(i + 1, n):
-            score = float(sim[i, j])
-            if score < 0.5:
+            score = float(sym_sim[i, j])
+            if score < LAW_SCORE_FLOOR:
                 continue
             a, b = parent_ids[i], parent_ids[j]
             if (min(a, b), max(a, b)) in _explicit_pair_set:
@@ -261,7 +299,7 @@ def _build_implicit_network():
             pairs.append({"source": a, "target": b, "score": round(score, 4)})
 
     _implicit_pairs = pairs
-    print(f"  [implicit] {len(pairs)} law-law semantic pairs (≥0.5, explicit excluded)")
+    print(f"  [implicit] {len(pairs)} law-law chunk-level pairs (floor≥{LAW_SCORE_FLOOR}, explicit excluded)")
 
     nodes = []
     for i, pid in enumerate(parent_ids):
@@ -310,49 +348,42 @@ def _build_implicit_network():
             print(f"  [implicit] case meta CSV load failed: {_e}")
 
     # Include ALL caselaw documents in corpus (not restricted to explicit network)
-    case_docs_all = _docs[_docs["source"] == "caselaw"].reset_index(drop=True)
-    MAX_CASES = 400
-    case_docs = (case_docs_all.head(MAX_CASES) if len(case_docs_all) > MAX_CASES
-                 else case_docs_all).reset_index(drop=True)
+    case_docs = _docs[_docs["source"] == "caselaw"].reset_index(drop=True)
     n_cases = len(case_docs)
 
     if n_cases > 0:
         print(f"  [implicit] computing case-law similarity for {n_cases} cases…")
-        case_vecs = np.zeros((n_cases, dim), dtype=np.float32)
+        case_parent_ids = case_docs["parent_id"].tolist()
+        # Chunk-level case-law scoring: for each case, score each law by
+        # max(case_chunk · law_mean) — same method as the notebook.
+        # This is more discriminative than mean-to-mean.
+        CASE_SCORE_FLOOR = 0.60  # matches slider minimum (displayed 0.2 → internal 0.60)
+        seen_pairs = set()
+        case_pairs = []
+
         for i in range(n_cases):
             idxs = case_docs.iloc[i]["chunk_indices"]
-            if idxs:
-                case_vecs[i] = _dense_vecs[idxs].mean(axis=0)
-
-        norms_c = np.linalg.norm(case_vecs, axis=1, keepdims=True)
-        norms_c[norms_c == 0] = 1.0
-        case_vecs /= norms_c
-
-        case_law_sim = (case_vecs @ law_vecs.T).astype(np.float32)  # (n_cases, n_laws)
-
-        # Diagnostic: show similarity distribution so we can tune the threshold
-        flat = case_law_sim.flatten()
-        print(f"  [implicit] case-law sim  mean={flat.mean():.3f}  "
-              f"max={flat.max():.3f}  p50={float(np.percentile(flat, 50)):.3f}  "
-              f"p75={float(np.percentile(flat, 75)):.3f}")
-
-        case_parent_ids = case_docs["parent_id"].tolist()
-        TOP_CASE_K = 3
-        # Use lower threshold (0.35) for cases — case-law BGE-M3 sims tend to be lower
-        # than law-law sims due to different text styles
-        CASE_SCORE_FLOOR = 0.35
-        case_pairs = []
-        for i in range(n_cases):
-            top_k = np.argpartition(-case_law_sim[i], min(TOP_CASE_K, n - 1))[:TOP_CASE_K]
-            for j in top_k:
-                score = float(case_law_sim[i, j])
-                if score >= CASE_SCORE_FLOOR:
-                    case_pairs.append({
-                        "source":       case_parent_ids[i],
-                        "target":       parent_ids[j],
-                        "score":        round(score, 4),
-                        "is_case_edge": True,
-                    })
+            if not idxs:
+                continue
+            chunk_vecs = dense_normed[idxs]              # (n_chunks, dim)
+            # scores[j] = max cosine sim of any case chunk vs law j mean
+            scores = (chunk_vecs @ law_vecs.T).max(axis=0)  # (n_laws,)
+            for j in np.where(scores >= CASE_SCORE_FLOOR)[0]:
+                score = float(scores[j])
+                key = (case_parent_ids[i], parent_ids[j])
+                if key in seen_pairs:
+                    continue
+                # Skip pairs already represented by an explicit citation
+                if key in _explicit_case_law_pairs:
+                    continue
+                seen_pairs.add(key)
+                case_pairs.append({
+                    "source":       case_parent_ids[i],
+                    "target":       parent_ids[j],
+                    "score":        round(score, 4),
+                    "is_case_edge": True,
+                })
+        print(f"  [implicit] {len(case_pairs)} case-law chunk-level pairs (floor≥{CASE_SCORE_FLOOR}, explicit excluded)")
 
         _implicit_case_pairs = case_pairs
 
@@ -369,6 +400,7 @@ def _build_implicit_network():
             if matched:
                 node = dict(matched)
                 node["is_case"]   = True
+                node["corpus_id"] = pid   # actual parent_id in _docs (may differ from node id)
                 node["case_name"] = csv_meta.get("case_name", "")
                 # Fill metadata from CSV if explicit network node had none
                 if not node.get("subject_matter"):
@@ -380,6 +412,7 @@ def _build_implicit_network():
                 label = shared if shared and shared != "nan" else pid
                 case_nodes.append({
                     "id":             pid,
+                    "corpus_id":      pid,   # same as id for unmatched cases
                     "label":          label,
                     "name":           title if title and title != "nan" else label,
                     "case_name":      csv_meta.get("case_name", ""),
@@ -452,10 +485,26 @@ def api_best_chunk():
     if not law_a or not law_b:
         return jsonify({"error": "need law_a and law_b"}), 400
 
-    row_a = _docs[_docs["parent_id"] == law_a]
-    row_b = _docs[_docs["parent_id"] == law_b]
+    def _resolve(doc_id: str):
+        """Find _docs row trying parent_id, shared_num, and title in order."""
+        rows = _docs[_docs["parent_id"] == doc_id]
+        if not rows.empty:
+            return rows
+        rows = _docs[_docs["shared_num"] == doc_id]
+        if not rows.empty:
+            return rows
+        # Last resort: title match (covers case name lookups)
+        rows = _docs[_docs["title"] == doc_id]
+        return rows
+
+    row_a = _resolve(law_a)
+    row_b = _resolve(law_b)
     if row_a.empty or row_b.empty:
-        return jsonify({"error": "law not found"}), 404
+        missing = []
+        if row_a.empty: missing.append(f"law_a={law_a!r}")
+        if row_b.empty: missing.append(f"law_b={law_b!r}")
+        print(f"  [best_chunk] not found in corpus: {', '.join(missing)}")
+        return jsonify({"error": "document not found in corpus"}), 404
 
     # Mean embedding of law_a
     idxs_a = row_a.iloc[0]["chunk_indices"]
@@ -476,6 +525,106 @@ def api_best_chunk():
         "best_chunk": str(_corpus.iloc[best_idx]["text"]),
         "score":      round(float(scores[best_i]), 4),
     })
+
+
+@app.route("/api/matching_chunks")
+def api_matching_chunks():
+    """Return all chunks of doc_id that score >= threshold against query_id's mean embedding."""
+    query_id  = request.args.get("query_id",  "").strip()
+    doc_id    = request.args.get("doc_id",    "").strip()
+    threshold = float(request.args.get("threshold", 0.5))
+    if not query_id or not doc_id:
+        return jsonify({"error": "need query_id and doc_id"}), 400
+
+    def _resolve(pid):
+        rows = _docs[_docs["parent_id"] == pid]
+        if not rows.empty: return rows
+        rows = _docs[_docs["shared_num"] == pid]
+        if not rows.empty: return rows
+        return _docs[_docs["title"] == pid]
+
+    q_rows = _resolve(query_id)
+    d_rows = _resolve(doc_id)
+    if q_rows.empty or d_rows.empty:
+        return jsonify({"chunks": []}), 404
+
+    # Mean embedding of query document
+    q_idxs = q_rows.iloc[0]["chunk_indices"]
+    q_vec  = _dense_vecs[q_idxs].astype(np.float32).mean(axis=0)
+    norm   = np.linalg.norm(q_vec)
+    q_vec  = q_vec / (norm if norm else 1.0)
+
+    # Score every chunk of the target document against the query mean
+    d_idxs   = d_rows.iloc[0]["chunk_indices"]
+    d_vecs   = _dense_vecs[d_idxs].astype(np.float32)
+    d_norms  = np.linalg.norm(d_vecs, axis=1, keepdims=True)
+    d_norms[d_norms == 0] = 1.0
+    scores   = (d_vecs / d_norms) @ q_vec          # shape (n_chunks,)
+
+    results = [
+        {"score": round(float(scores[k]), 4), "text": str(_corpus.iloc[idx]["text"])}
+        for k, idx in enumerate(d_idxs)
+        if float(scores[k]) >= threshold
+    ]
+    results.sort(key=lambda x: -x["score"])
+    return jsonify({"chunks": results})
+
+
+@app.route("/api/related")
+def api_related():
+    """Given a selected law or case doc_id, return all other docs whose best
+    chunk scores >= threshold against the query document's mean embedding.
+    Mirrors the notebook's cell ⑤ logic, applied to the full corpus."""
+    doc_id    = request.args.get("doc_id", "").strip()
+    threshold = float(request.args.get("threshold", DEFAULT_THRESHOLD))
+    if not doc_id:
+        return jsonify({"error": "need doc_id"}), 400
+    if _dense_normed is None:
+        return jsonify({"error": "corpus not loaded"}), 503
+
+    def _resolve(pid):
+        rows = _docs[_docs["parent_id"] == pid]
+        if not rows.empty: return rows
+        rows = _docs[_docs["shared_num"] == pid]
+        if not rows.empty: return rows
+        return _docs[_docs["title"] == pid]
+
+    q_rows = _resolve(doc_id)
+    if q_rows.empty:
+        return jsonify({"error": f"'{doc_id}' not found in corpus"}), 404
+
+    # Mean embedding of query document, normalised
+    q_idxs = q_rows.iloc[0]["chunk_indices"]
+    q_vecs  = _dense_vecs[q_idxs].astype(np.float32)
+    q_mean  = q_vecs.mean(axis=0)
+    norm    = np.linalg.norm(q_mean)
+    q_mean  = q_mean / (norm if norm else 1.0)
+
+    # One matrix multiply: every corpus chunk vs query mean → shape (n_chunks,)
+    all_scores = (_dense_normed @ q_mean).astype(np.float32)
+
+    results = []
+    for _, doc in _docs.iterrows():
+        if doc["parent_id"] == q_rows.iloc[0]["parent_id"]:
+            continue
+        idxs        = doc["chunk_indices"]
+        chunk_scores = all_scores[idxs]
+        best_pos    = int(np.argmax(chunk_scores))
+        best_score  = float(chunk_scores[best_pos])
+        if best_score < threshold:
+            continue
+        best_chunk = str(_corpus.iloc[idxs[best_pos]]["text"])
+        results.append({
+            "parent_id":       doc["parent_id"],
+            "source":          doc["source"],
+            "shared_num":      doc["shared_num"],
+            "title":           doc["title"],
+            "score":           round(best_score, 4),
+            "best_chunk_text": best_chunk,
+        })
+
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return jsonify({"results": results[:TOP_N], "query_id": doc_id})
 
 
 @app.route("/api/search", methods=["POST"])
@@ -586,8 +735,68 @@ def api_fulltext():
     return jsonify({"text": text, "parent_id": parent_id, "source": source})
 
 
-# Entry point 
-_DEFAULT_HTML = BASE_DIR / "network.html"
+@app.route("/api/law_names")
+def api_law_names():
+    """Return {celex: human_readable_name} dict from the law names CSV."""
+    global _law_names_cache
+    if _law_names_cache is None:
+        csv_path = BASE_DIR.parent / "260512-laws-celex-and-human-readable-names.csv"
+        if not csv_path.exists():
+            _law_names_cache = {}
+        else:
+            try:
+                df = pd.read_csv(csv_path, sep=";", dtype=str,
+                                 encoding="utf-8-sig", keep_default_na=False)
+                df.columns = [c.strip() for c in df.columns]
+                celex_col = next((c for c in df.columns if c.lower().startswith("celex")), None)
+                name_col  = next((c for c in df.columns if "human" in c.lower()), None)
+                if celex_col and name_col:
+                    _law_names_cache = {
+                        str(r[celex_col]).strip(): str(r[name_col]).strip()
+                        for _, r in df.iterrows()
+                        if r[celex_col].strip() and r[name_col].strip()
+                    }
+                else:
+                    _law_names_cache = {}
+                print(f"[law_names] {len(_law_names_cache)} names loaded")
+            except Exception as e:
+                print(f"[law_names] CSV load failed: {e}")
+                _law_names_cache = {}
+    return jsonify(_law_names_cache)
+
+
+@app.route("/api/case_names")
+def api_case_names():
+    """Return {case_number: case_name} dict from the case names CSV."""
+    global _case_names_cache
+    if _case_names_cache is None:
+        csv_path = BASE_DIR.parent / "260514091724-case-names-by-db.csv"
+        if not csv_path.exists():
+            _case_names_cache = {}
+        else:
+            try:
+                df = pd.read_csv(csv_path, sep=";", dtype=str,
+                                 encoding="utf-8-sig", keep_default_na=False)
+                df.columns = [c.strip() for c in df.columns]
+                num_col  = next((c for c in df.columns if "shared base" in c.lower()), None)
+                name_col = next((c for c in df.columns if "case name" in c.lower()), None)
+                if num_col and name_col:
+                    _case_names_cache = {
+                        str(r[num_col]).strip(): str(r[name_col]).strip()
+                        for _, r in df.iterrows()
+                        if r[num_col].strip() and r[name_col].strip()
+                    }
+                else:
+                    _case_names_cache = {}
+                print(f"[case_names] {len(_case_names_cache)} names loaded")
+            except Exception as e:
+                print(f"[case_names] CSV load failed: {e}")
+                _case_names_cache = {}
+    return jsonify(_case_names_cache)
+
+
+# Entry point
+_DEFAULT_HTML = BASE_DIR / "networks" / "network.html"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
