@@ -31,19 +31,46 @@ The HTML is served at http://localhost:5001/
 """
 
 import argparse
+import csv
 import json
 import re
 import unicodedata
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 from sklearn.metrics.pairwise import cosine_similarity
 
 app = Flask(__name__)
 CORS(app)   # allow fetch from HTML file opened locally
+
+# CSV access log — saved to Google Drive if running in Colab, otherwise next to server.py
+_GDRIVE = Path("/content/drive/MyDrive")
+LOG_PATH = (_GDRIVE / "eu_legal_access.csv") if _GDRIVE.exists() else (Path(__file__).parent / "access.csv")
+
+if not LOG_PATH.exists():
+    with open(LOG_PATH, "w", newline="", encoding="utf-8") as _f:
+        csv.writer(_f).writerow(["timestamp", "ip", "method", "path", "status_code", "search_query", "search_threshold"])
+
+
+@app.after_request
+def _log_and_patch(response):
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    with open(LOG_PATH, "a", newline="", encoding="utf-8") as _f:
+        csv.writer(_f).writerow([
+            datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            ip,
+            request.method,
+            request.path,
+            response.status_code,
+            g.get("search_query", ""),
+            g.get("search_threshold", ""),
+        ])
+    response.headers["ngrok-skip-browser-warning"] = "true"
+    return response
 
 # Paths
 BASE_DIR      = Path(__file__).parent
@@ -630,6 +657,9 @@ def api_search():
     if not query:
         return jsonify({"results": []})
 
+    g.search_query = query
+    g.search_threshold = threshold
+
     # Embed query
     q_vec = _model.encode(
         [query],
@@ -744,4 +774,4 @@ if __name__ == "__main__":
     HTML_PATH = args.html
     app.config["THRESHOLD"] = args.threshold
     load_data(args.threshold)
-    app.run(port=args.port, debug=False)
+    app.run(port=args.port, debug=False, threaded=True)
