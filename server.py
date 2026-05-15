@@ -93,12 +93,9 @@ def _log_and_patch(response):
 BASE_DIR      = Path(__file__).parent
 CORPUS_DIR    = BASE_DIR / "corpus"
 DATASET_DIR   = BASE_DIR / "Data"
-# Shortlist CSVs — loaded fully into memory at startup (fast primary lookup)
-LAW_CSV_SHORT  = DATASET_DIR / "laws.csv"
-CASE_CSV_SHORT = DATASET_DIR / "cases.csv"
-# Full CSVs — same files; fallback scans them chunk-by-chunk for ids not in the in-memory lookup
-LAW_CSV_FULL   = DATASET_DIR / "laws.csv"
-CASE_CSV_FULL  = DATASET_DIR / "cases.csv"
+# CSV files — loaded fully into memory at startup; also scanned chunk-by-chunk as fallback
+LAW_CSV  = DATASET_DIR / "laws.csv"
+CASE_CSV = DATASET_DIR / "cases.csv"
 HTML_PATH      = None   # set from --html arg at startup (default below)
 
 DEFAULT_THRESHOLD = 0.50
@@ -209,8 +206,8 @@ def load_data(threshold: float):
     print(f"  {len(_docs):,} documents indexed.")
 
     print("Loading shortlist CSVs into memory...")
-    df_law  = pd.read_csv(LAW_CSV_SHORT,  sep=";", low_memory=False)
-    df_case = pd.read_csv(CASE_CSV_SHORT, sep=";", low_memory=False)
+    df_law  = pd.read_csv(LAW_CSV,  sep=";", low_memory=False)
+    df_case = pd.read_csv(CASE_CSV, sep=";", low_memory=False)
 
     _law_lookup = {
         str(row["celex"]).strip(): clean_legal_text(_assemble_law(row))
@@ -367,9 +364,9 @@ def _build_implicit_network():
     # Build subject_matter/descriptor lookup from cases CSV (covers all cases,
     # not just those already in the explicit network)
     case_csv_meta: dict = {}
-    if CASE_CSV_SHORT.exists():
+    if CASE_CSV.exists():
         try:
-            _dcm = pd.read_csv(CASE_CSV_SHORT, sep=";", dtype=str,
+            _dcm = pd.read_csv(CASE_CSV, sep=";", dtype=str,
                                keep_default_na=False, encoding="utf-8-sig")
             _dcm.columns = [c.strip() for c in _dcm.columns]
             for _, _r in _dcm.iterrows():
@@ -720,7 +717,7 @@ def _fulltext_fallback(parent_id: str, source: str) -> str:
     if source in ("legislation", ""):
         law_cols = ["celex", "md_content_1",
                     "md_content_2_overflow_column", "md_content_3_overflow_column"]
-        for chunk in pd.read_csv(LAW_CSV_FULL, sep=";", low_memory=False,
+        for chunk in pd.read_csv(LAW_CSV, sep=";", low_memory=False,
                                  usecols=law_cols, chunksize=500):
             rows = chunk[chunk["celex"].astype(str).str.strip() == parent_id]
             if not rows.empty:
@@ -730,7 +727,7 @@ def _fulltext_fallback(parent_id: str, source: str) -> str:
     if not text and source in ("caselaw", ""):
         case_cols = ["CELEX [celex]", "ECLI [ecli]", "Case Number [publishedId]",
                      "Shared Base Case Number [by_DB]", "Markdown Content [by_DB]"]
-        for chunk in pd.read_csv(CASE_CSV_FULL, sep=";", low_memory=False,
+        for chunk in pd.read_csv(CASE_CSV, sep=";", low_memory=False,
                                  usecols=case_cols, chunksize=500):
             rows = chunk[
                 (chunk["CELEX [celex]"].astype(str).str.strip() == parent_id) |
@@ -794,7 +791,56 @@ def api_fulltext():
     return jsonify({"text": text, "parent_id": parent_id, "source": source})
 
 
-# Entry point 
+_law_names_cache  = None
+_case_names_cache = None
+
+def _load_names_csv(csv_path, key_hint: str, val_hint: str) -> dict:
+    """Load a two-column CSV into a {key: value} dict using vectorised pandas ops."""
+    if not csv_path.exists():
+        return {}
+    try:
+        df = pd.read_csv(csv_path, sep=";", dtype=str,
+                         encoding="utf-8-sig", keep_default_na=False)
+        df.columns = [c.strip() for c in df.columns]
+        key_col = next((c for c in df.columns if key_hint  in c.lower()), None)
+        val_col = next((c for c in df.columns if val_hint  in c.lower()), None)
+        if not key_col or not val_col:
+            return {}
+        keys = df[key_col].str.strip()
+        vals = df[val_col].str.strip()
+        result = {k: v for k, v in zip(keys, vals) if k and v}
+        print(f"[names] {len(result)} entries loaded from {csv_path.name}")
+        return result
+    except Exception as e:
+        print(f"[names] CSV load failed ({csv_path.name}): {e}")
+        return {}
+
+
+@app.route("/api/law_names")
+def api_law_names():
+    """Return {celex: human_readable_name} dict."""
+    global _law_names_cache
+    if _law_names_cache is None:
+        _law_names_cache = _load_names_csv(
+            DATASET_DIR / "260512-laws-celex-and-human-readable-names.csv",
+            "celex", "human",
+        )
+    return jsonify(_law_names_cache)
+
+
+@app.route("/api/case_names")
+def api_case_names():
+    """Return {shared_base_case_number: case_name} dict."""
+    global _case_names_cache
+    if _case_names_cache is None:
+        _case_names_cache = _load_names_csv(
+            DATASET_DIR / "260514091724-case-names-by-db.csv",
+            "shared base", "case name",
+        )
+    return jsonify(_case_names_cache)
+
+
+# Entry point
 _DEFAULT_HTML = BASE_DIR / "networks" / "network.html"
 
 if __name__ == "__main__":

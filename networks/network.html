@@ -166,6 +166,7 @@ canvas.hover{cursor:pointer}
   flex:none;padding-top:1px;min-width:36px;text-align:right}
 .nb-chunk-txt{color:var(--ink);opacity:.75;word-break:break-word;font-family:Georgia,serif}
 .nb-rank{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);min-width:22px}
+.nb-kind{font-size:8.5px;letter-spacing:.08em;font-weight:600;min-width:34px;text-align:center;padding:1px 4px;border-radius:3px;background:rgba(0,0,0,.06)}
 .nb-body{flex:1;min-width:0}
 .nb-name{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:13.5px;
   color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -272,6 +273,39 @@ canvas.hover{cursor:pointer}
   color:#6b7080;font-size:17px;line-height:1;padding:0 2px;
   border-radius:50%;transition:color .15s}
 .query-chip .qc-x:hover{color:var(--gold)}
+
+/* ---- zoom controls ---- */
+.zoom-btns{position:absolute;bottom:24px;right:24px;z-index:15;display:flex;flex-direction:column;gap:4px}
+.zoom-btn{width:34px;height:34px;background:rgba(20,24,31,.82);color:var(--gold);
+  border:1px solid var(--sidebar-rule);border-radius:4px;font-size:20px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;
+  backdrop-filter:blur(4px);transition:background .15s;padding:0}
+.zoom-btn:hover{background:rgba(20,24,31,.97);color:#fff}
+.zoom-btn.reset{font-size:13px;letter-spacing:.03em}
+
+/* ---- min-connections hint ---- */
+.mc-hint{font-size:9.5px;color:#7a8093;font-family:'IBM Plex Mono',monospace;
+  margin-top:2px;letter-spacing:.03em}
+
+/* ---- colour cluster legend ---- */
+.color-legend{display:flex;flex-direction:column;gap:1px;margin-bottom:6px}
+.legend-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:3px;
+  cursor:pointer;transition:background .12s,color .12s;user-select:none}
+.legend-row:hover{background:rgba(255,255,255,.07)}
+.legend-row.active{background:rgba(245,197,24,.12);outline:1px solid rgba(245,197,24,.22)}
+.legend-row.active .legend-name{color:var(--gold);font-weight:600}
+.legend-row.active .legend-dot{outline:2.5px solid var(--gold);outline-offset:1.5px}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex:none;box-shadow:0 0 0 1.5px rgba(0,0,0,.25)}
+.legend-name{flex:1;font-size:11px;color:#cfd3dd;line-height:1.35}
+.legend-cnt{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5a6075;flex:none}
+
+/* ---- cluster badge in detail panel ---- */
+.cluster-badge{display:flex;align-items:center;gap:9px;padding:8px 12px;
+  background:var(--gold-soft);border:1px solid var(--paper-rule);border-radius:5px;
+  margin-bottom:14px;font-size:12.5px;font-weight:600;color:var(--ink);letter-spacing:.01em}
+.cluster-dot{width:13px;height:13px;border-radius:50%;flex:none;
+  box-shadow:0 0 0 2px rgba(20,24,31,.12)}
+
 #nb-tt{position:fixed;pointer-events:none;background:rgba(20,24,31,0.88);color:#fff;
   font:11px 'IBM Plex Sans',sans-serif;padding:5px 9px;border-radius:4px;z-index:9999;
   max-width:280px;line-height:1.4;display:none;white-space:normal}
@@ -329,6 +363,15 @@ canvas.hover{cursor:pointer}
       <input id="q1" type="text" placeholder="GDPR, environment…" autocomplete="off">
     </div>
     <div class="results" id="res1"></div>
+
+    <div class="control">
+      <label>Min connections <b id="minConnLbl1">1</b></label>
+      <input id="minConnSlider1" type="range" min="1" max="20" step="1" value="1">
+      <div class="mc-hint">Hide nodes with fewer connections</div>
+    </div>
+
+    <div class="group-label">Colour Clusters</div>
+    <div class="color-legend" id="legend-law"></div>
   </div>
 
   <!-- VIEW 2: Case filters -->
@@ -339,12 +382,22 @@ canvas.hover{cursor:pointer}
     <label class="cb-row"><input type="checkbox" data-filter="operative" checked>
       <span class="swatch-line" style="background:var(--c-operative)"></span>Operative citations</label>
 
+    <div class="group-label">Connection Filter</div>
+    <div class="control">
+      <label>Min connections <b id="minConnLbl2">1</b></label>
+      <input id="minConnSlider2" type="range" min="1" max="20" step="1" value="1">
+      <div class="mc-hint">Hide nodes with fewer connections</div>
+    </div>
+
     <div class="group-label">Search</div>
     <div class="search">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9aa1b3" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q2" type="text" placeholder="C-417/11, GDPR…" autocomplete="off">
     </div>
     <div class="results" id="res2"></div>
+
+    <div class="group-label">Colour Clusters</div>
+    <div class="color-legend" id="legend-case"></div>
   </div>
 
   <!-- VIEW 3: Implicit semantic relations -->
@@ -390,13 +443,19 @@ canvas.hover{cursor:pointer}
       <label>Similarity Score <b id="simLbl">0.85</b></label>
       <input id="simSlider" type="range" min="0.5" max="0.99" step="0.01" value="0.85">
     </div>
+    <div class="control">
+      <label>Min connections <b id="minConnLbl3">1</b></label>
+      <input id="minConnSlider3" type="range" min="1" max="20" step="1" value="1">
+      <div class="mc-hint">Hide nodes with fewer connections</div>
+    </div>
 
     <div class="group-label">Legend</div>
-    <div style="font-size:11.5px;color:#a8aebd;line-height:1.8">
-      Node size ∝ connections<br>
-      Colour = EuroVoc group<br>
-      Edge opacity = similarity
+    <div style="font-size:11px;color:#a8aebd;line-height:1.9;margin-bottom:8px">
+      Node size ∝ connections · Edge opacity = similarity<br>
+      ● Law &nbsp;&nbsp;■ Case
     </div>
+    <div class="group-label">Colour Clusters</div>
+    <div class="color-legend" id="legend-impl"></div>
   </div>
 
   <div class="foot" id="foot">Loading…</div>
@@ -455,6 +514,13 @@ canvas.hover{cursor:pointer}
     </div>
     <div class="ctx-popup-body" id="ctxPopupBody"></div>
   </div>
+
+  <!-- Zoom controls -->
+  <div class="zoom-btns">
+    <button class="zoom-btn" id="zoomIn" title="Zoom in">+</button>
+    <button class="zoom-btn" id="zoomOut" title="Zoom out">−</button>
+    <button class="zoom-btn reset" id="zoomReset" title="Reset view">⊙</button>
+  </div>
 </main>
 </div>
 
@@ -511,6 +577,29 @@ const GROUP_COLORS = [
   '#3a86ff','#43aa8b','#e9c46a','#fb5607','#a8dadc',
   '#6a4c93','#f72585','#4361ee','#b5838d','#caffbf',
   '#9bf6ff','#ffd6a5','#ffadad','#bde0fe','#adb5bd',
+];
+
+const CLUSTER_NAMES = [
+  'Information Sharing Obligations',   // 0
+  'Internal Market Harmonisation',     // 1
+  'Data Protection Law',               // 2
+  'Personal Data Processing',          // 3
+  'Financial Services Regulation',     // 4
+  'Service Access & Provision',        // 5
+  'Digital Systems & Infrastructure',  // 6
+  'Member State Obligations',          // 7
+  'Transparency & Reporting Duties',   // 8
+  'Consumer Protection Law',           // 9
+  'Cross-Border Cooperation',          // 10
+  'Crime Prevention & Enforcement',    // 11
+  'Investment & Capital Markets',      // 12
+  'Financial Control & Audit',         // 13
+  'Migration & Asylum Law',            // 14
+  'EU Criminal Justice Cooperation',   // 15
+  'Data Collection & Statistics',      // 16
+  'External Border Management',        // 17
+  'Market Surveillance & Access',      // 18
+  'Miscellaneous',                     // 19
 ];
 
 // ================================================================
@@ -577,6 +666,12 @@ let RELATED_EDGES     = [];     // edges built from last /api/related call — d
 let _relatedDebounce  = null;   // timer handle for debouncing /api/related refetch on slider move
 let _connFilter       = 'all';  // persists the active connections-tab filter chip across slider refreshes
 let CORPUS_ID_MAP     = {};     // corpus_id (ECLI) → node — O(1) fallback for resolveNode
+let LAW_NAMES  = {};            // {celex: 'AI Act [Regulation (EU) 2024/1689]'} from CSV
+let CASE_NAMES = {};            // {case_number: 'Foo [C-649/18]'} from CSV
+let MIN_CONN   = { law: 1, case: 1, implicit: 1 };
+let CLUSTER_FILTER    = null;   // group index (0–19) to highlight; null = show all
+let IMPLICIT_NODES_FULL = [];   // full law node set (before min-conn filter)
+let IMPLICIT_CASE_FULL  = [];   // full case node set (before min-conn filter)
 
 // ================================================================
 // Load
@@ -605,6 +700,15 @@ function init() {
   updateStats();
   resize();
   wireEvents();
+  // Load human-readable names from server (non-blocking — fine if server is not running)
+  Promise.all([
+    fetch('/api/law_names').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    fetch('/api/case_names').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+  ]).then(([ln, cn]) => {
+    LAW_NAMES  = ln || {};
+    CASE_NAMES = cn || {};
+    if (SIM) draw();
+  });
   buildView();
 }
 
@@ -645,6 +749,67 @@ function fmt(n) {
   return String(n);
 }
 
+function getNodeName(n) {
+  if (!n) return '';
+  if (n.is_case) {
+    const key = n.label || n.name || n.id;
+    return CASE_NAMES[key] || n.case_name || n.name || n.label || n.id;
+  }
+  return LAW_NAMES[n.id] || KNOWN_LAWS[n.id] || n.name || n.label || n.id;
+}
+
+function getNodeNameShort(n) {
+  const full = getNodeName(n);
+  return full.replace(/\s*\[[^\]]*\]\s*$/, '').trim() || full;
+}
+
+function clusterBadge(n) {
+  if (!n || n.is_case || n.group == null) return '';
+  const g     = n.group ?? 19;
+  const color = GROUP_COLORS[g % GROUP_COLORS.length];
+  const name  = CLUSTER_NAMES[g] || 'Miscellaneous';
+  return `<div class="cluster-badge">
+    <span class="cluster-dot" style="background:${color}"></span>
+    <span>${esc(name)}</span>
+  </div>`;
+}
+
+function updateLegend() {
+  const ids = { law: 'legend-law', case: 'legend-case', implicit: 'legend-impl' };
+  const el  = document.getElementById(ids[VIEW]);
+  if (!el) return;
+
+  const counts = {};
+  SIM_NODES.forEach(n => {
+    if (!n.is_case) {
+      const g = n.group ?? 19;
+      counts[g] = (counts[g] || 0) + 1;
+    }
+  });
+  if (!Object.keys(counts).length) { el.innerHTML = ''; return; }
+
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  el.innerHTML = sorted.map(([g, cnt]) => {
+    const color    = GROUP_COLORS[+g % GROUP_COLORS.length];
+    const name     = CLUSTER_NAMES[+g] || 'Miscellaneous';
+    const isActive = CLUSTER_FILTER === +g;
+    return `<div class="legend-row${isActive ? ' active' : ''}" data-group="${g}" title="Click to focus on this cluster">
+      <span class="legend-dot" style="background:${color}"></span>
+      <span class="legend-name">${esc(name)}</span>
+      <span class="legend-cnt">${cnt}</span>
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('.legend-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const g = +row.dataset.group;
+      CLUSTER_FILTER = (CLUSTER_FILTER === g) ? null : g;
+      updateLegend();
+      draw();
+    });
+  });
+}
+
 // ================================================================
 // View building
 // ================================================================
@@ -665,8 +830,7 @@ function buildLawView() {
   NODE_MAP = Object.fromEntries(SIM_NODES.map(n => [n.id, n]));
 
   // Assign initial radial positions for cold start
-  const W = CV.getBoundingClientRect().width || 800;
-  const H = CV.getBoundingClientRect().height || 600;
+  const { width: W = 800, height: H = 600 } = CV.getBoundingClientRect();
   SIM_NODES.forEach((n, i) => {
     if (n.x === undefined) {
       const a = (i / SIM_NODES.length) * Math.PI * 2;
@@ -688,6 +852,13 @@ function buildLawView() {
   const deg = {};
   SIM_NODES.forEach(n => { deg[n.id] = 0; });
   rawEdges.forEach(e => { deg[e.source] = (deg[e.source] || 0) + 1; deg[e.target] = (deg[e.target] || 0) + 1; });
+
+  // Min-connections filter
+  const minC1 = MIN_CONN.law;
+  if (minC1 > 1) {
+    SIM_NODES = SIM_NODES.filter(n => (deg[n.id] || 0) >= minC1);
+    NODE_MAP  = Object.fromEntries(SIM_NODES.map(n => [n.id, n]));
+  }
   SIM_NODES.forEach(n => { n.r = 3 + Math.min(10, Math.sqrt(deg[n.id] || 0) * 1.3); });
 
   SIM_EDGES = rawEdges
@@ -700,11 +871,24 @@ function buildLawView() {
 
   startSim('law');
   doSearch1(document.getElementById('q1').value);
+  updateLegend();
 }
 
 function buildCaseView() {
   // Active law and case nodes
-  const rawEdges = DATA.case_law_edges.filter(e => FILTERS[e.type]);
+  const allRawEdges = DATA.case_law_edges.filter(e => FILTERS[e.type]);
+
+  // Min-connections filter (View 2)
+  const deg2 = {};
+  allRawEdges.forEach(e => {
+    deg2[e.source] = (deg2[e.source] || 0) + 1;
+    deg2[e.target] = (deg2[e.target] || 0) + 1;
+  });
+  const minC2    = MIN_CONN.case;
+  const rawEdges = minC2 > 1
+    ? allRawEdges.filter(e => (deg2[e.source] || 0) >= minC2 && (deg2[e.target] || 0) >= minC2)
+    : allRawEdges;
+
   const activeLaws  = new Set(rawEdges.map(e => e.target));
   const activeCases = new Set(rawEdges.map(e => e.source));
 
@@ -713,8 +897,7 @@ function buildCaseView() {
   SIM_NODES = [...lawNodes, ...caseNodes];
   NODE_MAP  = Object.fromEntries(SIM_NODES.map(n => [n.id, n]));
 
-  const W = CV.getBoundingClientRect().width || 800;
-  const H = CV.getBoundingClientRect().height || 600;
+  const { width: W = 800, height: H = 600 } = CV.getBoundingClientRect();
   SIM_NODES.forEach((n, i) => {
     if (n.x === undefined) {
       const a = (i / SIM_NODES.length) * Math.PI * 2;
@@ -734,6 +917,7 @@ function buildCaseView() {
 
   startSim('case');
   doSearch2(document.getElementById('q2').value);
+  updateLegend();
 }
 
 async function buildImplicitView() {
@@ -763,8 +947,7 @@ async function buildImplicitView() {
     }
   }
 
-  const W = CV.getBoundingClientRect().width  || 800;
-  const H = CV.getBoundingClientRect().height || 600;
+  const { width: W = 800, height: H = 600 } = CV.getBoundingClientRect();
 
   // Build a lookup of pre-computed law positions from DATA (from explicit_network_layout.json)
   const explicitPos = {};
@@ -819,6 +1002,10 @@ async function buildImplicitView() {
   NODE_MAP  = Object.fromEntries(SIM_NODES.map(n => [n.id, n]));
   rebuildCorpusIdMap();
 
+  // Save full node sets for reversible min-conn filtering
+  IMPLICIT_NODES_FULL = SIM_NODES.filter(n => !n.is_case);
+  IMPLICIT_CASE_FULL  = SIM_NODES.filter(n =>  n.is_case);
+
   rebuildImplicitEdges();
   doSearch3(document.getElementById('q3').value);
 }
@@ -831,6 +1018,13 @@ function rebuildImplicitEdges() {
   const threshold  = sliderToThreshold(displayed);
   const TOP_K = 8;
   document.getElementById('simLbl').textContent = displayed.toFixed(2);
+
+  // Restore full node set so min-conn filter is reversible without re-fetching
+  if (IMPLICIT_NODES_FULL.length) {
+    SIM_NODES = [...IMPLICIT_NODES_FULL, ...IMPLICIT_CASE_FULL];
+    NODE_MAP  = Object.fromEntries(SIM_NODES.map(n => [n.id, n]));
+    rebuildCorpusIdMap();
+  }
 
   // Filter by threshold then apply top-K per node
   const above = IMPLICIT_ALL_EDGES.filter(e => e.score >= threshold);
@@ -886,6 +1080,21 @@ function rebuildImplicitEdges() {
     n.r    = n.is_case ? 5 : 3 + Math.min(10, Math.sqrt(n._deg) * 1.3);
   });
 
+  // Min-connections filter — removes law nodes below threshold; case visibility handled by _deg in draw()
+  const prevNodeCount = SIM_NODES.length;
+  const minC = MIN_CONN.implicit;
+  if (minC > 1) {
+    SIM_NODES = SIM_NODES.filter(n => n.is_case || (n._deg || 0) >= minC);
+    NODE_MAP  = Object.fromEntries(SIM_NODES.map(n => [n.id, n]));
+    rebuildCorpusIdMap();
+    SIM_EDGES = SIM_EDGES.filter(e => {
+      const sid = typeof e.source === 'object' ? e.source.id : e.source;
+      const tid = typeof e.target === 'object' ? e.target.id : e.target;
+      return NODE_MAP[sid] && NODE_MAP[tid];
+    });
+  }
+  const nodeSetChanged = SIM_NODES.length !== prevNodeCount;
+
   // On first load: snap connected case nodes to the centroid of their law neighbours
   // so they start near the cluster instead of on a distant outer ring.
   const caseCentroid = {};
@@ -915,11 +1124,10 @@ function rebuildImplicitEdges() {
   document.getElementById('sN').textContent = fmt(nLaws);
   document.getElementById('sX').textContent = fmt(nCases);
   document.getElementById('kX').textContent = 'Cases';
-  document.getElementById('sX').textContent = fmt(nCases);
   document.getElementById('foot').textContent =
     `${nLaws.toLocaleString()} laws · ${nCases.toLocaleString()} connected cases · ${SIM_EDGES.length.toLocaleString()} edges (top-${TOP_K}/node, ≥${threshold.toFixed(2)})`;
 
-  if (SIM) {
+  if (SIM && !nodeSetChanged) {
     SIM.force('link', d3.forceLink(SIM_EDGES).id(d => d.id)
       .distance(e => e.is_case_edge ? 60 : 15 + (1 - e.score) * 30)
       .strength(e => e.is_case_edge ? 0.2 : Math.min(0.5, e.score * 0.4)));
@@ -927,6 +1135,7 @@ function rebuildImplicitEdges() {
   } else if (SIM_NODES.length > 0) {
     startSimImplicit();
   }
+  updateLegend();
   // Refresh connections tab — debounced so rapid slider drags don't flood /api/related.
   // Pass skipFulltext:true so the already-loaded full-text tab isn't re-fetched on every slide.
   clearTimeout(_relatedDebounce);
@@ -936,6 +1145,22 @@ function rebuildImplicitEdges() {
 // ================================================================
 // Simulation
 // ================================================================
+function fitToData() {
+  const xs = SIM_NODES.filter(n => n.x != null).map(n => n.x);
+  const ys = SIM_NODES.filter(n => n.y != null).map(n => n.y);
+  if (!xs.length) return;
+  const pad = 60;
+  const W   = CV.getBoundingClientRect().width  || 800;
+  const H   = CV.getBoundingClientRect().height || 600;
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const k  = Math.min((W - pad * 2) / (maxX - minX), (H - pad * 2) / (maxY - minY), 2);
+  const tx = W / 2 - ((minX + maxX) / 2) * k;
+  const ty = H / 2 - ((minY + maxY) / 2) * k;
+  TRANSFORM = d3.zoomIdentity.translate(tx, ty).scale(k);
+  if (ZOOM_BEHAVIOR) d3.select(CV).call(ZOOM_BEHAVIOR.transform, TRANSFORM);
+}
+
 function startSim(mode) {
   if (SIM) SIM.stop();
 
@@ -1035,6 +1260,11 @@ function draw() {
         const hit = QUERY_FOCUS_IDS.has(s.id) && QUERY_FOCUS_IDS.has(t.id);
         alpha = hit ? 0.5 + e.score * 0.4 : 0.02;
         lw    = hit ? 1.0 + e.score * 0.8 : 0.2;
+      } else if (CLUSTER_FILTER !== null) {
+        const sIn = !s.is_case && (s.group ?? 19) === CLUSTER_FILTER;
+        const tIn = !t.is_case && (t.group ?? 19) === CLUSTER_FILTER;
+        alpha = (sIn || tIn) ? 0.35 + e.score * 0.45 : 0.02;
+        lw    = (sIn || tIn) ? 0.6  + e.score * 0.8  : 0.2;
       } else {
         alpha = 0.08 + e.score * 0.35;
         lw    = 0.4  + e.score * 0.8;
@@ -1048,6 +1278,11 @@ function draw() {
         const hit = QUERY_FOCUS_IDS.has(s.id) && QUERY_FOCUS_IDS.has(t.id);
         alpha = hit ? 0.7 : 0.02;
         lw    = hit ? 1.2 : 0.2;
+      } else if (CLUSTER_FILTER !== null) {
+        const sIn = !s.is_case && (s.group ?? 19) === CLUSTER_FILTER;
+        const tIn = !t.is_case && (t.group ?? 19) === CLUSTER_FILTER;
+        alpha = (sIn || tIn) ? 0.60 : 0.03;
+        lw    = (sIn || tIn) ? 1.0  : 0.3;
       } else {
         alpha = 0.22;
         lw    = 0.8;
@@ -1087,7 +1322,9 @@ function draw() {
     const isFocus = highlightIds.has(n.id);
     const dimmed  = nbs
       ? (!nbs.has(n.id) && !isFocus)
-      : (QUERY_FOCUS_IDS ? (!QUERY_FOCUS_IDS.has(n.id) && !isFocus) : false);
+      : (QUERY_FOCUS_IDS
+          ? (!QUERY_FOCUS_IDS.has(n.id) && !isFocus)
+          : (CLUSTER_FILTER !== null && !n.is_case && (n.group ?? 19) !== CLUSTER_FILTER && !isFocus));
     const r2 = n.r * (isSelectedNode ? 1.55 : isFocus ? 1.2 : 1);
 
     if (isFocus) {
@@ -1125,7 +1362,7 @@ function draw() {
     CTX.textBaseline = 'middle';
     const drawLbl = n => {
       if (!n || n.x == null) return;
-      const lbl = trunc(n.label || n.id, 32);
+      const lbl = trunc(getNodeNameShort(n), 32);
       const x   = n.x + (n.is_case ? n.r * 1.35 : n.r) + 5 / TRANSFORM.k;
       const y   = n.y;
       const w   = CTX.measureText(lbl).width + 8 / TRANSFORM.k;
@@ -1247,6 +1484,7 @@ function wireEvents() {
       closePanel();
       SELECTED = null; HOVER = null;
       QUERY_FOCUS_IDS = null; IMPLICIT_QUERY = ''; QUERY_BEST_CHUNKS = {};
+      CLUSTER_FILTER = null;
       // Also reset the semantic search UI so stale query chip never persists across view switches
       document.getElementById('q3-semantic').value = '';
       document.getElementById('res3-semantic').innerHTML = '';
@@ -1352,6 +1590,123 @@ function wireEvents() {
     // Update matching_chunks threshold for any open dropdowns
     document.querySelectorAll('.nb-chunks[data-loaded]').forEach(el => delete el.dataset.loaded);
   });
+
+  // min-connections sliders (all three views)
+  document.getElementById('minConnSlider1').addEventListener('input', e => {
+    MIN_CONN.law = +e.target.value;
+    document.getElementById('minConnLbl1').textContent = MIN_CONN.law;
+    if (VIEW === 'law') buildView();
+  });
+  document.getElementById('minConnSlider2').addEventListener('input', e => {
+    MIN_CONN.case = +e.target.value;
+    document.getElementById('minConnLbl2').textContent = MIN_CONN.case;
+    if (VIEW === 'case') buildView();
+  });
+  document.getElementById('minConnSlider3').addEventListener('input', e => {
+    MIN_CONN.implicit = +e.target.value;
+    document.getElementById('minConnLbl3').textContent = MIN_CONN.implicit;
+    if (VIEW === 'implicit' && SIM_NODES.length) rebuildImplicitEdges();
+  });
+
+  // zoom buttons
+  document.getElementById('zoomIn').addEventListener('click', () => {
+    d3.select(CV).transition().duration(280).call(ZOOM_BEHAVIOR.scaleBy, 1.45);
+  });
+  document.getElementById('zoomOut').addEventListener('click', () => {
+    d3.select(CV).transition().duration(280).call(ZOOM_BEHAVIOR.scaleBy, 1 / 1.45);
+  });
+  document.getElementById('zoomReset').addEventListener('click', () => {
+    d3.select(CV).transition().duration(400).call(ZOOM_BEHAVIOR.transform, d3.zoomIdentity);
+  });
+
+  // connections panel — delegated so listeners aren't re-attached on every node click
+  const connEl = document.getElementById('tab-connections');
+  connEl.addEventListener('click', ev => {
+    const chip = ev.target.closest('.conn-chip');
+    if (chip) {
+      connEl.querySelectorAll('.conn-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const f = chip.dataset.filter;
+      _connFilter = f;
+      connEl.querySelectorAll('.nb-row').forEach(row => {
+        const rowIsCase = row.dataset.isCase === 'true';
+        const show = VIEW === 'implicit'
+          ? f === 'all' || (f === 'case' && rowIsCase) || (f === 'law' && !rowIsCase)
+          : f === 'all' || row.dataset.edgeType === f;
+        row.style.display = show ? '' : 'none';
+        if (VIEW === 'implicit') {
+          const chunks = row.nextElementSibling;
+          if (chunks?.classList.contains('nb-chunks') && !show) chunks.style.display = 'none';
+        }
+      });
+      return;
+    }
+
+    const expand = ev.target.closest('.nb-expand');
+    if (expand) {
+      ev.stopPropagation();
+      const chunksEl = expand.closest('.nb-row').nextElementSibling;
+      if (!chunksEl?.classList.contains('nb-chunks')) return;
+      const isOpen = expand.classList.toggle('open');
+      chunksEl.style.display = isOpen ? 'block' : 'none';
+      if (!isOpen || chunksEl.dataset.loaded) return;
+      chunksEl.dataset.loaded = '1';
+      const disp      = parseFloat(document.getElementById('simSlider').value) || 0.85;
+      const sliderThr = sliderToThreshold(disp);
+      const rowScore  = parseFloat(expand.closest('.nb-row')?.dataset.score) || 1;
+      const thr       = Math.min(sliderThr, rowScore - 0.001);
+      fetch(`/api/matching_chunks?query_id=${encodeURIComponent(expand.dataset.qid)}&doc_id=${encodeURIComponent(expand.dataset.did)}&threshold=${thr}`)
+        .then(r => r.json())
+        .then(d => {
+          const chunks = d.chunks || [];
+          if (!chunks.length) {
+            chunksEl.innerHTML = '<div class="nb-chunk-row"><span class="nb-chunk-sc"></span><span class="nb-chunk-txt" style="color:var(--muted)">No chunks above threshold.</span></div>';
+            return;
+          }
+          chunksEl.innerHTML = chunks.map(c => {
+            const preview = c.text.length > 320 ? c.text.slice(0, 320).trimEnd() + ' …' : c.text;
+            return `<div class="nb-chunk-row">
+              <span class="nb-chunk-sc">${c.score.toFixed(3)}</span>
+              <span class="nb-chunk-txt" data-tt="${esc(c.text)}" title="">${esc(preview)}</span>
+            </div>`;
+          }).join('');
+        })
+        .catch(() => {
+          chunksEl.innerHTML = '<div class="nb-chunk-row"><span class="nb-chunk-sc"></span><span class="nb-chunk-txt" style="color:var(--muted)">Error loading chunks.</span></div>';
+        });
+      return;
+    }
+
+    const row = ev.target.closest('.nb-row');
+    if (!row) return;
+    if (VIEW === 'implicit') {
+      const oth = NODE_MAP[row.dataset.id] || resolveNode(row.dataset.corpusId) || {
+        id:        row.dataset.id,
+        corpus_id: row.dataset.corpusId || row.dataset.id,
+        label:     row.dataset.label,
+        name:      row.dataset.name,
+        is_case:   row.dataset.isCase === 'true',
+      };
+      openRelatedPopup(oth, SELECTED ? (SELECTED.corpus_id || SELECTED.id) : null);
+    } else {
+      const oth = NODE_MAP[row.dataset.id];
+      if (oth) selectAndCenter(oth);
+    }
+  });
+
+  connEl.addEventListener('mouseover', ev => {
+    const row = ev.target.closest('.nb-row');
+    if (!row || ev.relatedTarget?.closest('.nb-row') === row) return;
+    const oth = VIEW === 'implicit'
+      ? (NODE_MAP[row.dataset.id] || resolveNode(row.dataset.corpusId))
+      : NODE_MAP[row.dataset.id];
+    if (oth) { HOVER = oth; draw(); }
+  });
+  connEl.addEventListener('mouseout', ev => {
+    const row = ev.target.closest('.nb-row');
+    if (!row || ev.relatedTarget?.closest('.nb-row') === row) return;
+    HOVER = null; draw();
+  });
 }
 
 function inv(px, py) {
@@ -1377,12 +1732,31 @@ function esc(s) {
   );
 }
 
+function toArr(v) {
+  return Array.isArray(v) ? v : (v ? String(v).split('|').map(s => s.trim()).filter(Boolean) : []);
+}
+
 // ================================================================
 // Search
 // ================================================================
 function doSearch1(term) {
   const pool = searchNodes(DATA ? DATA.law_nodes : [], term);
   renderResults('res1', pool, 'law');
+  const t = term.trim().toLowerCase();
+  if (t) {
+    const allNodes = [...(DATA.law_nodes || [])];
+    QUERY_FOCUS_IDS = new Set(allNodes.filter(n =>
+      (KNOWN_LAWS[n.id]  || '').toLowerCase().includes(t) ||
+      (LAW_NAMES[n.id]   || '').toLowerCase().includes(t) ||
+      (n.label || '').toLowerCase().includes(t) ||
+      (n.name  || '').toLowerCase().includes(t) ||
+      (n.id    || '').toLowerCase().includes(t)
+    ).map(n => n.id));
+    if (!QUERY_FOCUS_IDS.size) QUERY_FOCUS_IDS = null;
+  } else {
+    QUERY_FOCUS_IDS = null;
+  }
+  draw();
 }
 
 function doSearch3(term) {
@@ -1493,6 +1867,23 @@ function doSearch2(term) {
   const cases = searchNodes(DATA ? DATA.case_nodes : [], term);
   const pool  = [...cases.slice(0, 10), ...laws.slice(0, 20)];
   renderResults('res2', pool, 'mixed');
+  const t = term.trim().toLowerCase();
+  if (t) {
+    const allNodes = [...(DATA.law_nodes || []), ...(DATA.case_nodes || [])];
+    QUERY_FOCUS_IDS = new Set(allNodes.filter(n => {
+      const caseKey = n.label || n.name || n.id;
+      return (KNOWN_LAWS[n.id]    || '').toLowerCase().includes(t) ||
+             (LAW_NAMES[n.id]     || '').toLowerCase().includes(t) ||
+             (CASE_NAMES[caseKey] || '').toLowerCase().includes(t) ||
+             (n.label || '').toLowerCase().includes(t) ||
+             (n.name  || '').toLowerCase().includes(t) ||
+             (n.id    || '').toLowerCase().includes(t);
+    }).map(n => n.id));
+    if (!QUERY_FOCUS_IDS.size) QUERY_FOCUS_IDS = null;
+  } else {
+    QUERY_FOCUS_IDS = null;
+  }
+  draw();
 }
 
 function searchNodes(nodes, term) {
@@ -1511,29 +1902,47 @@ function searchNodes(nodes, term) {
                         .sort((a, b) => (degMap[b.id] || 0) - (degMap[a.id] || 0));
     return [...known, ...others];   // all nodes, no cap
   }
-  return nodes.filter(n =>
-    (KNOWN_LAWS[n.id] || '').toLowerCase().includes(term) ||
-    (n.label || '').toLowerCase().includes(term) ||
-    (n.name  || '').toLowerCase().includes(term) ||
-    (n.id    || '').toLowerCase().includes(term)
-  );  // all matches, no cap
+  const matched = nodes.map(n => {
+    const caseKey  = n.label || n.name || n.id;
+    const haystack = [
+      KNOWN_LAWS[n.id]    || '',
+      LAW_NAMES[n.id]     || '',
+      CASE_NAMES[caseKey] || '',
+      n.label || '',
+      n.name  || '',
+      n.id    || '',
+    ].map(s => s.toLowerCase());
+    if (!haystack.some(s => s.includes(term))) return null;
+    // Score: 0=no match, 1=id/label only, 2=name substring, 3=name word-boundary, 4=name starts-with
+    const nameFields = haystack.slice(0, 3);  // KNOWN_LAWS, LAW_NAMES, CASE_NAMES
+    const wordRe = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+    let score = 1;
+    if (nameFields.some(s => s.includes(term)))            score = 2;
+    if (nameFields.some(s => wordRe.test(s)))              score = 3;
+    if (nameFields.some(s => s.startsWith(term)))          score = 4;
+    return { n, score };
+  }).filter(Boolean);
+  matched.sort((a, b) => b.score - a.score);
+  return matched.map(x => x.n);  // all matches, ranked by relevance
 }
 
 function renderResults(containerId, pool, mode) {
   const out = document.getElementById(containerId);
   if (!pool.length) { out.innerHTML = '<div class="result-empty">no matches</div>'; return; }
   out.innerHTML = pool.map((n, i) => {
-    const friendly = KNOWN_LAWS[n.id];
-    // Laws: friendly name (gold) → CELEX. Cases: friendly name → case number (label).
-    const display  = friendly
-      ? `<b style="color:var(--gold)">${esc(friendly)}</b>`
+    const humanName = getNodeNameShort(n);
+    // Laws: human-readable name in gold. Cases: case name in gold.
+    const display  = humanName && humanName !== n.id
+      ? `<b style="color:var(--gold)">${esc(humanName)}</b>`
       : n.is_case
         ? esc(n.label || n.id)
         : esc(n.id);
-    const typeTag  = n.is_case || (mode === 'mixed' && n.subject_matter) ? 'CASE' : 'LAW';
+    const isCase   = n.is_case || (mode === 'mixed' && n.subject_matter);
+    const typeTag  = isCase ? 'CASE' : 'LAW';
+    const typeCol  = isCase ? '#4361ee' : '#2a9d8f';
     return `<div class="result-row" data-id="${esc(n.id)}">
        <span class="rn">${String(i + 1).padStart(2, '0')}</span>
-       <span class="rt">${typeTag}</span>
+       <span class="rt" style="color:${typeCol}">${typeTag}</span>
        <span>${display}</span>
      </div>`;
   }).join('');
@@ -1565,7 +1974,6 @@ function selectAndCenter(n) {
   const k         = Math.max(TRANSFORM.k, 1.2);
   TRANSFORM  = d3.zoomIdentity.translate(visW / 2 - n.x * k, rect.height / 2 - n.y * k).scale(k);
   if (ZOOM_BEHAVIOR) d3.select(CV).call(ZOOM_BEHAVIOR.transform, TRANSFORM);
-  draw();
 }
 
 // ================================================================
@@ -1578,19 +1986,17 @@ function selectNode(n, { skipFulltext = false } = {}) {
 
   if (VIEW === 'implicit') {
     if (n.is_case) {
-      // Case: prefer Case Name (EN) as title; shared base case number (label) as sub-id
       const caseTitle = n.case_name || (n.name && n.name !== n.id && n.name !== n.label ? n.name : (n.label || n.id));
       const caseSub   = (n.label && n.label !== n.id) ? n.label : n.id;
       document.getElementById('pName').textContent  = caseTitle;
       document.getElementById('pCelex').textContent = caseSub;
     } else {
-      // Law: short friendly name or celex
-      const friendly = KNOWN_LAWS[n.id];
-      document.getElementById('pName').textContent  = friendly || n.id;
+      document.getElementById('pName').textContent  = getNodeNameShort(n) || n.id;
       document.getElementById('pCelex').textContent = n.id;
     }
   } else {
-    document.getElementById('pName').textContent  = n.name || n.label || n.id;
+    // Use human-readable name from LAW_NAMES/CASE_NAMES if available, fall back to node properties
+    document.getElementById('pName').textContent  = getNodeNameShort(n) || n.name || n.label || n.id;
     document.getElementById('pCelex').textContent = n.id;
   }
 
@@ -1605,17 +2011,16 @@ function selectNode(n, { skipFulltext = false } = {}) {
   } else if (VIEW === 'implicit') {
     // In implicit tab: show full title at top of info, then metadata tags
     const fullTitle = n.name && n.name !== n.id ? `<div class="info-full-title">${esc(n.name)}</div>` : '';
-    info.innerHTML = fullTitle +
+    info.innerHTML = fullTitle + clusterBadge(n) +
       tagGroup('Subject Matter', n.subject_matter || []) +
       tagGroup('EuroVoc', n.eurovoc || []) +
       tagGroup('Directory', n.directory || []);
   } else {
-    // subject_matter may be a pipe-separated string (case nodes) or an array (law nodes)
-    const toArr = v => Array.isArray(v) ? v : (v ? String(v).split('|').map(s => s.trim()).filter(Boolean) : []);
-    info.innerHTML = `
-      ${tagGroup('Subject Matter', toArr(n.subject_matter))}
-      ${tagGroup('EuroVoc',        toArr(n.eurovoc))}
-      ${tagGroup('Directory',      toArr(n.directory))}`;
+    info.innerHTML =
+      clusterBadge(n) +
+      tagGroup('Subject Matter', toArr(n.subject_matter)) +
+      tagGroup('EuroVoc',        toArr(n.eurovoc)) +
+      tagGroup('Directory',      toArr(n.directory));
   }
 
   // Connections tab
@@ -1669,14 +2074,22 @@ function selectNode(n, { skipFulltext = false } = {}) {
           // Use the NODE_MAP key as data-id so canvas hover works; store corpus_id separately for fulltext
           const displayId = resolved ? resolved.id : corpusId;
           const isCase = x.source === 'caselaw';
-          const lbl    = x.title || x.shared_num || corpusId;
+          const sharedNum = x.shared_num || (resolved && resolved.label) || '';
+          const rawLbl    = x.title || sharedNum || corpusId;
+          const humanLbl  = isCase
+            ? (CASE_NAMES[sharedNum] || CASE_NAMES[corpusId] || rawLbl)
+            : (KNOWN_LAWS[displayId] || LAW_NAMES[displayId] || rawLbl);
+          const subLbl    = isCase ? (sharedNum || corpusId) : corpusId;
           const pct    = Math.round(x.score * 100);
-          const qid    = n.id;
-          return `<div class="nb-row" data-id="${esc(displayId)}" data-corpus-id="${esc(corpusId)}" data-is-case="${isCase}" data-label="${esc(x.shared_num || corpusId)}" data-name="${esc(lbl)}" data-score="${x.score}">
+          const qid    = n.corpus_id || n.id;  // corpus_id = ECLI for case nodes
+          const kindCol  = isCase ? '#4361ee' : '#2a9d8f';
+          const kindTag  = isCase ? 'CASE' : 'LAW';
+          return `<div class="nb-row" data-id="${esc(displayId)}" data-corpus-id="${esc(corpusId)}" data-is-case="${isCase}" data-label="${esc(sharedNum || corpusId)}" data-name="${esc(humanLbl)}" data-score="${x.score}">
             <div class="nb-rank">${String(i + 1).padStart(2, '0')}</div>
+            <span class="nb-kind" style="color:${kindCol}">${kindTag}</span>
             <div class="nb-body">
-              <div class="nb-name" data-tt="${esc(lbl)}">${esc(trunc(lbl, 42))}</div>
-              <div class="nb-celex">${esc(corpusId)}</div>
+              <div class="nb-name" data-tt="${esc(humanLbl)}">${esc(trunc(humanLbl, 42))}</div>
+              <div class="nb-celex">${esc(subLbl)}</div>
             </div>
             <div class="nb-bar"><div style="width:${pct}%"></div></div>
             <div class="nb-sc">${x.score.toFixed(3)}</div>
@@ -1701,78 +2114,7 @@ function selectNode(n, { skipFulltext = false } = {}) {
               if (chunks?.classList.contains('nb-chunks') && !show) chunks.style.display = 'none';
             });
           }
-
-          connEl.querySelectorAll('.conn-chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-              connEl.querySelectorAll('.conn-chip').forEach(c => c.classList.remove('active'));
-              chip.classList.add('active');
-              const f = chip.dataset.filter;
-              _connFilter = f;
-              connEl.querySelectorAll('.nb-row').forEach(row => {
-                const rowIsCase = row.dataset.isCase === 'true';
-                const show = f === 'all' || (f === 'case' && rowIsCase) || (f === 'law' && !rowIsCase);
-                row.style.display = show ? '' : 'none';
-                const chunks = row.nextElementSibling;
-                if (chunks?.classList.contains('nb-chunks') && !show) chunks.style.display = 'none';
-              });
-            });
-          });
         }
-
-        connEl.querySelectorAll('.nb-expand').forEach(btn => {
-          btn.addEventListener('click', ev => {
-            ev.stopPropagation();
-            const chunksEl = btn.closest('.nb-row').nextElementSibling;
-            if (!chunksEl?.classList.contains('nb-chunks')) return;
-            const isOpen = btn.classList.toggle('open');
-            chunksEl.style.display = isOpen ? 'block' : 'none';
-            if (!isOpen || chunksEl.dataset.loaded) return;
-            chunksEl.dataset.loaded = '1';
-            const disp      = parseFloat(document.getElementById('simSlider').value) || 0.85;
-            const sliderThr = sliderToThreshold(disp);
-            // Cap at just below the row's connection score so the best chunk always shows
-            const rowScore  = parseFloat(btn.closest('.nb-row')?.dataset.score) || 1;
-            const thr       = Math.min(sliderThr, rowScore - 0.001);
-            fetch(`/api/matching_chunks?query_id=${encodeURIComponent(btn.dataset.qid)}&doc_id=${encodeURIComponent(btn.dataset.did)}&threshold=${thr}`)
-              .then(r => r.json())
-              .then(d => {
-                const chunks = d.chunks || [];
-                if (!chunks.length) {
-                  chunksEl.innerHTML = '<div class="nb-chunk-row"><span class="nb-chunk-sc"></span><span class="nb-chunk-txt" style="color:var(--muted)">No chunks above threshold.</span></div>';
-                  return;
-                }
-                chunksEl.innerHTML = chunks.map(c => {
-                  const preview = c.text.length > 320 ? c.text.slice(0, 320).trimEnd() + ' …' : c.text;
-                  return `<div class="nb-chunk-row">
-                    <span class="nb-chunk-sc">${c.score.toFixed(3)}</span>
-                    <span class="nb-chunk-txt" data-tt="${esc(c.text)}" title="">${esc(preview)}</span>
-                  </div>`;
-                }).join('');
-              })
-              .catch(() => {
-                chunksEl.innerHTML = '<div class="nb-chunk-row"><span class="nb-chunk-sc"></span><span class="nb-chunk-txt" style="color:var(--muted)">Error loading chunks.</span></div>';
-              });
-          });
-        });
-
-        connEl.querySelectorAll('.nb-row').forEach(row => {
-          row.addEventListener('mouseenter', () => {
-            // data-id is the NODE_MAP key (display id); resolveNode handles corpus_id fallback
-            const oth = NODE_MAP[row.dataset.id] || resolveNode(row.dataset.corpusId);
-            if (oth) { HOVER = oth; draw(); }
-          });
-          row.addEventListener('mouseleave', () => { HOVER = null; draw(); });
-          row.addEventListener('click', () => {
-            const oth = NODE_MAP[row.dataset.id] || resolveNode(row.dataset.corpusId) || {
-              id:        row.dataset.id,
-              corpus_id: row.dataset.corpusId || row.dataset.id,
-              label:     row.dataset.label,
-              name:      row.dataset.name,
-              is_case:   row.dataset.isCase === 'true',
-            };
-            openRelatedPopup(oth, SELECTED ? SELECTED.id : null);
-          });
-        });
       })
       .catch(() => {
         if (SELECTED !== n) return;
@@ -1803,44 +2145,26 @@ function selectNode(n, { skipFulltext = false } = {}) {
         const tid   = typeof e.target === 'object' ? e.target.id : e.target;
         const othId = sid === n.id ? tid : sid;
         const oth   = NODE_MAP[othId];
-        const lbl   = oth ? (oth.label || oth.id) : othId;
         const isCase = !!(oth && oth.is_case);
+        const humanName = oth ? getNodeNameShort(oth) : othId;
+        const lbl   = (humanName && humanName !== othId) ? humanName : (oth ? (oth.label || oth.id) : othId);
+        const subId = isCase ? (oth && oth.label && oth.label !== oth.id ? oth.label : othId) : othId;
         const col = EDGE_COLOR[e.type] || '#888';
         const sc  = e.shared_count ? ` (×${e.shared_count})` : '';
         const edgeType = (e.type || '').toLowerCase();
+        const kindCol2 = isCase ? '#4361ee' : '#2a9d8f';
+        const kindTag2 = isCase ? 'CASE' : 'LAW';
         return `<div class="nb-row" data-id="${esc(othId)}" data-is-case="${isCase}" data-edge-type="${esc(edgeType)}">
           <div class="nb-rank">${String(i + 1).padStart(2, '0')}</div>
+          <span class="nb-kind" style="color:${kindCol2}">${kindTag2}</span>
           <div class="nb-body">
             <div class="nb-name" data-tt="${esc(lbl)}">${esc(trunc(lbl, 42))}</div>
-            <div class="nb-celex">${esc(othId)}</div>
+            <div class="nb-celex">${esc(subId)}</div>
           </div>
           <div class="nb-type" style="background:${col}">${esc(EDGE_LABEL[e.type] || e.type)}${esc(sc)}</div>
         </div>`;
       }).join('');
 
-      connEl.querySelectorAll('.conn-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-          connEl.querySelectorAll('.conn-chip').forEach(c => c.classList.remove('active'));
-          chip.classList.add('active');
-          const f = chip.dataset.filter;
-          connEl.querySelectorAll('.nb-row').forEach(row => {
-            const show = f === 'all' || row.dataset.edgeType === f;
-            row.style.display = show ? '' : 'none';
-          });
-        });
-      });
-
-      connEl.querySelectorAll('.nb-row').forEach(row => {
-        row.addEventListener('mouseenter', () => {
-          const oth = NODE_MAP[row.dataset.id];
-          if (oth) { HOVER = oth; draw(); }
-        });
-        row.addEventListener('mouseleave', () => { HOVER = null; draw(); });
-        row.addEventListener('click', () => {
-          const oth = NODE_MAP[row.dataset.id];
-          if (oth) selectAndCenter(oth);
-        });
-      });
     }
   }
 
