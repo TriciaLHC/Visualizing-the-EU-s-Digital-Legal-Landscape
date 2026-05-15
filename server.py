@@ -35,7 +35,7 @@ import csv
 import json
 import re
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -54,7 +54,7 @@ _LOG_DIR.mkdir(parents=True, exist_ok=True)
 _LOG_HEADER = ["timestamp", "ip", "method", "path", "status_code", "search_query", "search_threshold", "document_id"]
 
 def _log_path() -> Path:
-    return _LOG_DIR / f"{datetime.utcnow().strftime('%Y%m%d')}-eu_legal_access.csv"
+    return _LOG_DIR / f"{datetime.now(timezone.utc).strftime('%Y%m%d')}-eu_legal_access.csv"
 
 def _append_log(row: list):
     p = _log_path()
@@ -86,7 +86,7 @@ def _log_and_patch(response):
         doc_id = ""
 
     _append_log([
-        datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         ip,
         request.method,
         request.path,
@@ -760,7 +760,7 @@ def api_log_event():
     ip   = request.headers.get("X-Forwarded-For", request.remote_addr)
     with open(LOG_PATH, "a", newline="", encoding="utf-8") as _f:
         csv.writer(_f).writerow([
-            datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             ip,
             "EVENT",
             data.get("event_type", ""),
