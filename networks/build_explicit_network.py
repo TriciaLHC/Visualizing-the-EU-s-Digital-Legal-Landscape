@@ -1,3 +1,10 @@
+##HERE:
+#cd "C:\ADS MASTER\THESIS PROJECT\Final\networks"
+#python build_explicit_network.py   # → explicit_network_data.json
+#python build_layout.py             # → explicit_network_layout.json  (only needed for network_static.html)
+#python -m http.server 8080
+
+
 """
 build_explicit_network.py
 =========================
@@ -60,6 +67,7 @@ LAWS_COLS = [
     "incoming_references_by_other_laws_based_on_body_text",
     "incoming_references_by_case_law_in_the_cases_reasoning",
     "incoming_references_by_case_law_in_the_cases_operative_part",
+    "inclusion_tier",
 ]
 
 CASES_COLS = [
@@ -145,7 +153,7 @@ def parse_case_refs(text: str, valid: set[str]) -> list[str]:
 # Loading
 # -------------------------------------------------------------------- #
 
-def load_laws(path: Path) -> pd.DataFrame:
+def load_laws(path: Path, tier: int | None = 1) -> pd.DataFrame:
     df = pd.read_csv(path, sep=";", dtype=str, keep_default_na=False,
                      encoding="utf-8-sig", engine="python")
     df.columns = [c.strip() for c in df.columns]
@@ -153,7 +161,12 @@ def load_laws(path: Path) -> pd.DataFrame:
     if missing:
         raise SystemExit(f"[load_laws] missing columns: {missing}")
     df = df[LAWS_COLS].copy().reset_index(drop=True)
-    print(f"[load_laws] {len(df):,} laws")
+    if tier is not None:
+        before = len(df)
+        df = df[df["inclusion_tier"].str.strip() == str(tier)].reset_index(drop=True)
+        print(f"[load_laws] {len(df):,} tier-{tier} laws  (filtered from {before:,})")
+    else:
+        print(f"[load_laws] {len(df):,} laws")
     return df
 
 
@@ -338,17 +351,19 @@ def build_case_law_edges(cases_df: pd.DataFrame, valid_laws: set[str]) -> list[d
 # -------------------------------------------------------------------- #
 
 def main() -> None:
-    ROOT        = Path(__file__).resolve().parent.parent
-    DATA        = ROOT / "Data"
-    DELIVERABLES = ROOT / "deliverables"
+    ROOT     = Path(__file__).resolve().parent.parent
+    DATA     = ROOT / "Data"
+    NETWORKS = Path(__file__).resolve().parent   # same folder as this script
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--laws",   type=Path, default=DATA / "laws.csv")
     ap.add_argument("--cases",  type=Path, default=DATA / "cases.csv")
-    ap.add_argument("--output", type=Path, default=DELIVERABLES / "explicit_network_data.json")
+    ap.add_argument("--output", type=Path, default=NETWORKS / "explicit_network_data.json")
+    ap.add_argument("--tier",   type=int,  default=1,
+                    help="Only include laws with this inclusion_tier (default 1). Pass 0 for all.")
     args = ap.parse_args()
 
-    laws_df  = load_laws(args.laws)
+    laws_df  = load_laws(args.laws, tier=args.tier if args.tier > 0 else None)
     cases_df = load_cases(args.cases)
 
     group_names, celex_to_gid = assign_groups(laws_df)
