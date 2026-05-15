@@ -1509,6 +1509,7 @@ function wireEvents() {
   sl.addEventListener('input', () => {
     MIN_SHARED = +sl.value;
     document.getElementById('sharedLbl').textContent = MIN_SHARED;
+    logEvent('threshold_shared_tags', { value: MIN_SHARED, view: VIEW });
     if (VIEW === 'law') buildView();
   });
 
@@ -1536,11 +1537,19 @@ function wireEvents() {
     });
   });
 
-  // search boxes
-  document.getElementById('q1').addEventListener('input', e => doSearch1(e.target.value));
-  document.getElementById('q2').addEventListener('input', e => doSearch2(e.target.value));
+  // search boxes — debounced so we log the settled query, not every keystroke
+  const _debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+  document.getElementById('q1').addEventListener('input', e => {
+    doSearch1(e.target.value);
+    _debounce(v => logEvent('search', { search_query: v, view: 'law' }), 500)(e.target.value);
+  });
+  document.getElementById('q2').addEventListener('input', e => {
+    doSearch2(e.target.value);
+    _debounce(v => logEvent('search', { search_query: v, view: 'case' }), 500)(e.target.value);
+  });
   document.getElementById('q3').addEventListener('input', e => {
     doSearch3(e.target.value);
+    _debounce(v => logEvent('search', { search_query: v, view: 'implicit' }), 500)(e.target.value);
   });
   // Dedicated semantic (AI) query input — separate from law-name search
   document.getElementById('q3-semantic').addEventListener('keydown', e => {
@@ -1572,7 +1581,8 @@ function wireEvents() {
   });
 
   // Exclude-exact checkbox re-runs the active query
-  document.getElementById('semExcludeExact').addEventListener('change', () => {
+  document.getElementById('semExcludeExact').addEventListener('change', e => {
+    logEvent('exclude_exact_toggle', { checked: e.target.checked });
     const current = document.getElementById('q3-semantic').value.trim();
     if (current) doSemanticSearch(current);
   });
@@ -1583,41 +1593,46 @@ function wireEvents() {
 
   // Global click capture
   document.addEventListener('click', ev => {
-    const el = ev.target;
+    const el     = ev.target;
+    const label  = el.closest('label');
     logEvent('click', {
-      tag:       el.tagName.toLowerCase(),
-      id:        el.id || undefined,
-      classes:   el.className || undefined,
-      text:      el.textContent?.trim().slice(0, 60) || undefined,
-      view:      VIEW,
-      selected:  SELECTED?.id || undefined,
+      tag:        el.tagName.toLowerCase(),
+      id:         el.id || undefined,
+      classes:    el.className || undefined,
+      filter:     el.dataset.filter || el.closest('[data-filter]')?.dataset.filter || undefined,
+      text:       (label?.textContent || el.textContent)?.trim().slice(0, 60) || undefined,
+      view:       VIEW,
+      selected:   SELECTED?.id || undefined,
     });
   }, { capture: true });
   doSearch1(''); doSearch2(''); doSearch3('');
 
   // implicit similarity slider
-  document.getElementById('simSlider').addEventListener('input', () => {
+  document.getElementById('simSlider').addEventListener('input', e => {
     if (VIEW === 'implicit' && SIM_NODES.length) rebuildImplicitEdges();
     else document.getElementById('simLbl').textContent =
-      (+document.getElementById('simSlider').value).toFixed(2);
-    // Update matching_chunks threshold for any open dropdowns
+      (+e.target.value).toFixed(2);
     document.querySelectorAll('.nb-chunks[data-loaded]').forEach(el => delete el.dataset.loaded);
+    logEvent('threshold_sim', { value: +e.target.value, view: VIEW });
   });
 
   // min-connections sliders (all three views)
   document.getElementById('minConnSlider1').addEventListener('input', e => {
     MIN_CONN.law = +e.target.value;
     document.getElementById('minConnLbl1').textContent = MIN_CONN.law;
+    logEvent('threshold_min_conn', { value: MIN_CONN.law, view: 'law' });
     if (VIEW === 'law') buildView();
   });
   document.getElementById('minConnSlider2').addEventListener('input', e => {
     MIN_CONN.case = +e.target.value;
     document.getElementById('minConnLbl2').textContent = MIN_CONN.case;
+    logEvent('threshold_min_conn', { value: MIN_CONN.case, view: 'case' });
     if (VIEW === 'case') buildView();
   });
   document.getElementById('minConnSlider3').addEventListener('input', e => {
     MIN_CONN.implicit = +e.target.value;
     document.getElementById('minConnLbl3').textContent = MIN_CONN.implicit;
+    logEvent('threshold_min_conn', { value: MIN_CONN.implicit, view: 'implicit' });
     if (VIEW === 'implicit' && SIM_NODES.length) rebuildImplicitEdges();
   });
 
