@@ -48,12 +48,22 @@ app = Flask(__name__)
 CORS(app)   # allow fetch from HTML file opened locally
 
 # CSV access log — saved to Google Drive if running in Colab, otherwise next to server.py
-_GDRIVE = Path("/content/drive/MyDrive/CPDP_2026_thesis")
-LOG_PATH = (_GDRIVE / "eu_legal_access.csv") if _GDRIVE.exists() else (Path(__file__).parent / "access.csv")
+_GDRIVE   = Path("/content/drive/MyDrive/CPDP_2026_thesis")
+_LOG_DIR  = (_GDRIVE if _GDRIVE.exists() else Path(__file__).parent) / "logs"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+_LOG_HEADER = ["timestamp", "ip", "method", "path", "status_code", "search_query", "search_threshold", "document_id"]
 
-if not LOG_PATH.exists():
-    with open(LOG_PATH, "w", newline="", encoding="utf-8") as _f:
-        csv.writer(_f).writerow(["timestamp", "ip", "method", "path", "status_code", "search_query", "search_threshold", "document_id"])
+def _log_path() -> Path:
+    return _LOG_DIR / f"{datetime.utcnow().strftime('%Y%m%d')}-eu_legal_access.csv"
+
+def _append_log(row: list):
+    p = _log_path()
+    write_header = not p.exists()
+    with open(p, "a", newline="", encoding="utf-8") as _f:
+        w = csv.writer(_f)
+        if write_header:
+            w.writerow(_LOG_HEADER)
+        w.writerow(row)
 
 
 @app.after_request
@@ -75,17 +85,16 @@ def _log_and_patch(response):
     else:
         doc_id = ""
 
-    with open(LOG_PATH, "a", newline="", encoding="utf-8") as _f:
-        csv.writer(_f).writerow([
-            datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            ip,
-            request.method,
-            request.path,
-            response.status_code,
-            g.get("search_query", ""),
-            g.get("search_threshold", ""),
-            doc_id,
-        ])
+    _append_log([
+        datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        ip,
+        request.method,
+        request.path,
+        response.status_code,
+        g.get("search_query", ""),
+        g.get("search_threshold", ""),
+        doc_id,
+    ])
     response.headers["ngrok-skip-browser-warning"] = "true"
     return response
 
