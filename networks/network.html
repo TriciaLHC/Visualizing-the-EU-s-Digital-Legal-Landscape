@@ -1580,6 +1580,19 @@ function wireEvents() {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closePopup();
   });
+
+  // Global click capture
+  document.addEventListener('click', ev => {
+    const el = ev.target;
+    logEvent('click', {
+      tag:       el.tagName.toLowerCase(),
+      id:        el.id || undefined,
+      classes:   el.className || undefined,
+      text:      el.textContent?.trim().slice(0, 60) || undefined,
+      view:      VIEW,
+      selected:  SELECTED?.id || undefined,
+    });
+  }, { capture: true });
   doSearch1(''); doSearch2(''); doSearch3('');
 
   // implicit similarity slider
