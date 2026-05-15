@@ -1454,9 +1454,18 @@ function wireEvents() {
         const tid = typeof e.target === 'object' ? e.target.id : e.target;
         return sid === n.id || tid === n.id;
       }).length;
+      const _cg = n.is_case ? null : (n.group ?? 19);
+      const _cc = _cg !== null ? GROUP_COLORS[_cg % GROUP_COLORS.length] : '';
+      const _cn = _cg !== null ? (CLUSTER_NAMES[_cg] || 'Miscellaneous') : '';
+      const tipCluster = _cn
+        ? `<div style="margin-top:4px;display:flex;align-items:center;gap:5px">
+             <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${_cc};flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.3)"></span>
+             <span style="font-size:10px;color:#9aa1b3;font-family:'IBM Plex Mono',monospace">${esc(_cn)}</span>
+           </div>` : '';
       TT.innerHTML = `
         <div class="tn">${esc(n.name || n.label)}</div>
         <div class="tid">${esc(n.id)}</div>
+        ${tipCluster}
         <div class="tm">${n.is_case ? 'Case' : 'Law'} · ${deg} connection${deg !== 1 ? 's' : ''}</div>`;
     } else {
       CV.classList.remove('hover');
