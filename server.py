@@ -33,6 +33,7 @@ The HTML is served at http://localhost:5001/
 import argparse
 import csv
 import json
+import os
 import re
 import unicodedata
 from datetime import datetime, timezone
@@ -47,16 +48,38 @@ from sklearn.metrics.pairwise import cosine_similarity
 app = Flask(__name__)
 CORS(app)   # allow fetch from HTML file opened locally
 
-# CSV access log — saved to Google Drive if running in Colab, otherwise next to server.py
-_GDRIVE   = Path("/content/drive/MyDrive/CPDP_2026_thesis")
-_LOG_DIR  = (_GDRIVE if _GDRIVE.exists() else Path(__file__).parent) / "logs"
-_LOG_DIR.mkdir(parents=True, exist_ok=True)
+# Logging — Google Sheet if LOG_SHEET_URL env var is set, otherwise local CSV
 _LOG_HEADER = ["timestamp", "ip", "method", "path", "status_code", "search_query", "search_threshold", "document_id"]
+_LOG_SHEET  = None
+
+_SHEET_URL = os.environ.get("LOG_SHEET_URL", "")
+if _SHEET_URL:
+    try:
+        import gspread
+        from google.auth import default as _gauth
+        _creds, _ = _gauth()
+        _LOG_SHEET = gspread.authorize(_creds).open_by_url(_SHEET_URL).sheet1
+        print(f"[log] Google Sheet logging active")
+    except Exception as _e:
+        print(f"[log] Sheet setup failed, falling back to CSV: {_e}")
+
+# Always set up CSV fallback dir (used if sheet write fails or no sheet configured)
+_GDRIVE  = Path("/content/drive/MyDrive/CPDP-Presentation setup")
+_LOG_DIR = (_GDRIVE if _GDRIVE.exists() else Path(__file__).parent) / "logs"
+if _LOG_SHEET is None:
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 def _log_path() -> Path:
     return _LOG_DIR / f"{datetime.now(timezone.utc).strftime('%Y%m%d')}-eu_legal_access.csv"
 
 def _append_log(row: list):
+    if _LOG_SHEET is not None:
+        try:
+            _LOG_SHEET.append_row(row, value_input_option="RAW")
+            return
+        except Exception as _e:
+            print(f"[log] Sheet write failed: {_e}")
+    # CSV fallback
     p = _log_path()
     write_header = not p.exists()
     with open(p, "a", newline="", encoding="utf-8") as _f:
