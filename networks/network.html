@@ -2170,11 +2170,11 @@ function selectNode(n, { skipFulltext = false } = {}) {
     if (!conns.length) {
       connEl.innerHTML = '<div class="empty-state"><div class="icon">[—]</div><p>No connections visible under current filters.</p></div>';
     } else {
-      const filterBar = `<div class="conn-filter-bar">
+      const filterBar = VIEW === 'case' ? `<div class="conn-filter-bar">
            <button class="conn-chip active" data-filter="all">All</button>
            <button class="conn-chip" data-filter="reasoning">Reasoning</button>
            <button class="conn-chip" data-filter="operative">Operative</button>
-         </div>`;
+         </div>` : '';
 
       connEl.innerHTML = filterBar + conns.map((e, i) => {
         const sid   = typeof e.source === 'object' ? e.source.id : e.source;
