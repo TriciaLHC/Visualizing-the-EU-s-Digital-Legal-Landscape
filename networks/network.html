@@ -1454,9 +1454,18 @@ function wireEvents() {
         const tid = typeof e.target === 'object' ? e.target.id : e.target;
         return sid === n.id || tid === n.id;
       }).length;
+      const _cg = n.is_case ? null : (n.group ?? 19);
+      const _cc = _cg !== null ? GROUP_COLORS[_cg % GROUP_COLORS.length] : '';
+      const _cn = _cg !== null ? (CLUSTER_NAMES[_cg] || 'Miscellaneous') : '';
+      const tipCluster = _cn
+        ? `<div style="margin-top:4px;display:flex;align-items:center;gap:5px">
+             <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${_cc};flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.3)"></span>
+             <span style="font-size:10px;color:#9aa1b3;font-family:'IBM Plex Mono',monospace">${esc(_cn)}</span>
+           </div>` : '';
       TT.innerHTML = `
-        <div class="tn">${esc(n.name || n.label)}</div>
+        <div class="tn">${esc(getNodeName(n))}</div>
         <div class="tid">${esc(n.id)}</div>
+        ${tipCluster}
         <div class="tm">${n.is_case ? 'Case' : 'Law'} · ${deg} connection${deg !== 1 ? 's' : ''}</div>`;
     } else {
       CV.classList.remove('hover');
@@ -1859,15 +1868,14 @@ async function doSemanticSearch(term) {
     } else {
       const scoreClass = isLowMid ? 'sc-lowmid' : '';
       out.innerHTML = results.map((x, i) => {
-        const isCase   = x.source === 'caselaw';
-        const friendly = KNOWN_LAWS[x.parent_id];
-        const node     = resolveNode(x.parent_id);
-        const lbl      = friendly || (node ? (node.label || node.name) : (x.title || x.parent_id));
-        const display  = friendly
-          ? `<b style="color:var(--gold)">${esc(friendly)}</b>`
-          : esc(trunc(lbl, 30));
+        const isCase    = x.source === 'caselaw';
+        const node      = resolveNode(x.parent_id);
+        const humanName = node ? getNodeName(node) : (x.title || x.parent_id);
+        const display   = humanName && humanName !== x.parent_id
+          ? `<b style="color:var(--gold)">${esc(trunc(humanName, 36))}</b>`
+          : esc(trunc(humanName || x.parent_id, 36));
         const typeTag  = isCase ? 'CASE' : 'LAW';
-        const typeCol  = isCase ? '#4361ee' : '#5a6075';
+        const typeCol  = isCase ? '#4361ee' : '#2a9d8f';
         return `<div class="result-row" data-id="${esc(x.parent_id)}">
           <span class="rn">${String(i+1).padStart(2,'0')}</span>
           <span class="rt" style="color:${typeCol}">${typeTag}</span>
@@ -2162,11 +2170,11 @@ function selectNode(n, { skipFulltext = false } = {}) {
     if (!conns.length) {
       connEl.innerHTML = '<div class="empty-state"><div class="icon">[—]</div><p>No connections visible under current filters.</p></div>';
     } else {
-      const filterBar = `<div class="conn-filter-bar">
+      const filterBar = VIEW === 'case' ? `<div class="conn-filter-bar">
            <button class="conn-chip active" data-filter="all">All</button>
            <button class="conn-chip" data-filter="reasoning">Reasoning</button>
            <button class="conn-chip" data-filter="operative">Operative</button>
-         </div>`;
+         </div>` : '';
 
       connEl.innerHTML = filterBar + conns.map((e, i) => {
         const sid   = typeof e.source === 'object' ? e.source.id : e.source;

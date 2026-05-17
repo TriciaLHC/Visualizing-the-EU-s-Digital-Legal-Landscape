@@ -33,9 +33,10 @@ The HTML is served at http://localhost:5001/
 import argparse
 import csv
 import json
+import os
 import re
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -47,13 +48,45 @@ from sklearn.metrics.pairwise import cosine_similarity
 app = Flask(__name__)
 CORS(app)   # allow fetch from HTML file opened locally
 
-# CSV access log — saved to Google Drive if running in Colab, otherwise next to server.py
-_GDRIVE = Path("/content/drive/MyDrive/CPDP_2026_thesis")
-LOG_PATH = (_GDRIVE / "eu_legal_access.csv") if _GDRIVE.exists() else (Path(__file__).parent / "access.csv")
+# Logging — Google Sheet if LOG_SHEET_URL env var is set, otherwise local CSV
+_LOG_HEADER = ["timestamp", "ip", "method", "path", "status_code", "search_query", "search_threshold", "document_id"]
+_LOG_SHEET  = None
 
-if not LOG_PATH.exists():
-    with open(LOG_PATH, "w", newline="", encoding="utf-8") as _f:
-        csv.writer(_f).writerow(["timestamp", "ip", "method", "path", "status_code", "search_query", "search_threshold", "document_id"])
+_SHEET_URL = os.environ.get("LOG_SHEET_URL", "")
+if _SHEET_URL:
+    try:
+        import gspread
+        from google.auth import default as _gauth
+        _creds, _ = _gauth()
+        _LOG_SHEET = gspread.authorize(_creds).open_by_url(_SHEET_URL).sheet1
+        print(f"[log] Google Sheet logging active")
+    except Exception as _e:
+        print(f"[log] Sheet setup failed, falling back to CSV: {_e}")
+
+# Always set up CSV fallback dir (used if sheet write fails or no sheet configured)
+_GDRIVE  = Path("/content/drive/MyDrive/CPDP-Presentation setup")
+_LOG_DIR = (_GDRIVE if _GDRIVE.exists() else Path(__file__).parent) / "logs"
+if _LOG_SHEET is None:
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+def _log_path() -> Path:
+    return _LOG_DIR / f"{datetime.now(timezone.utc).strftime('%Y%m%d')}-eu_legal_access.csv"
+
+def _append_log(row: list):
+    if _LOG_SHEET is not None:
+        try:
+            _LOG_SHEET.append_row(row, value_input_option="RAW")
+            return
+        except Exception as _e:
+            print(f"[log] Sheet write failed: {_e}")
+    # CSV fallback
+    p = _log_path()
+    write_header = not p.exists()
+    with open(p, "a", newline="", encoding="utf-8") as _f:
+        w = csv.writer(_f)
+        if write_header:
+            w.writerow(_LOG_HEADER)
+        w.writerow(row)
 
 
 @app.after_request
@@ -75,17 +108,16 @@ def _log_and_patch(response):
     else:
         doc_id = ""
 
-    with open(LOG_PATH, "a", newline="", encoding="utf-8") as _f:
-        csv.writer(_f).writerow([
-            datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            ip,
-            request.method,
-            request.path,
-            response.status_code,
-            g.get("search_query", ""),
-            g.get("search_threshold", ""),
-            doc_id,
-        ])
+    _append_log([
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        ip,
+        request.method,
+        request.path,
+        response.status_code,
+        g.get("search_query", ""),
+        g.get("search_threshold", ""),
+        doc_id,
+    ])
     response.headers["ngrok-skip-browser-warning"] = "true"
     return response
 
@@ -751,7 +783,7 @@ def api_log_event():
     ip   = request.headers.get("X-Forwarded-For", request.remote_addr)
     with open(LOG_PATH, "a", newline="", encoding="utf-8") as _f:
         csv.writer(_f).writerow([
-            datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             ip,
             "EVENT",
             data.get("event_type", ""),
