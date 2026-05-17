@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(\\(Get-Content \"C:\\\\ADS MASTER\\\\THESIS PROJECT\\\\Visualizing-the-EU-s-Digital-Legal-Landscape\\\\networks\\\\network.html\"\\).Count)",
+      "PowerShell(Select-String -Path \"C:\\\\ADS MASTER\\\\THESIS PROJECT\\\\Visualizing-the-EU-s-Digital-Legal-Landscape\\\\networks\\\\network.html\" -Pattern \"view3|view 3|implicit|bge|BGE|View3\" | Select-Object -First 40 | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Substring\\(0, [Math]::Min\\(150, $_.Line.Length\\)\\)\\)\" })",
+      "PowerShell(netstat -ano)"
+    ]
+  }
+}
