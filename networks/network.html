@@ -695,6 +695,10 @@ function init() {
     LAW_NAMES  = ln || {};
     CASE_NAMES = cn || {};
     if (SIM) draw();
+    // Re-render the search list now that human-readable names are available
+    doSearch1(document.getElementById('q1')?.value || '');
+    doSearch2(document.getElementById('q2')?.value || '');
+    doSearch3(document.getElementById('q3')?.value || '');
   });
   buildView();
 }
@@ -1801,8 +1805,31 @@ function doSearch1(term) {
 }
 
 function doSearch3(term) {
-  const pool = searchNodes(SIM_NODES, term);
-  renderResults('res3', pool, 'law');
+  // Use the full pre-filter node lists so min-conn doesn't hide searchable nodes,
+  // but still restrict to what's actually in the implicit network (not DATA.case_nodes).
+  const allLaws  = (IMPLICIT_NODES_FULL.length ? IMPLICIT_NODES_FULL : SIM_NODES.filter(n => !n.is_case))
+                     .map(n => ({...n, is_case: false}));
+  const allCases = (IMPLICIT_CASE_FULL.length  ? IMPLICIT_CASE_FULL  : SIM_NODES.filter(n =>  n.is_case))
+                     .map(n => ({...n, is_case: true}));
+  const fullPool = [...allLaws, ...allCases];
+  const pool = searchNodes(fullPool, term);
+  renderResults('res3', pool, 'mixed');
+
+  const t = term.trim().toLowerCase();
+  if (t) {
+    QUERY_FOCUS_IDS = new Set(fullPool.filter(n => {
+      const caseKey = n.label || n.name || n.id;
+      return (LAW_NAMES[n.id]     || '').toLowerCase().includes(t) ||
+             (CASE_NAMES[caseKey] || '').toLowerCase().includes(t) ||
+             (n.label || '').toLowerCase().includes(t) ||
+             (n.name  || '').toLowerCase().includes(t) ||
+             (n.id    || '').toLowerCase().includes(t);
+    }).map(n => n.id));
+    if (!QUERY_FOCUS_IDS.size) QUERY_FOCUS_IDS = null;
+  } else {
+    QUERY_FOCUS_IDS = null;
+  }
+  draw();
 }
 
 async function doSemanticSearch(term) {
@@ -1905,7 +1932,7 @@ async function doSemanticSearch(term) {
 function doSearch2(term) {
   const laws  = searchNodes(DATA ? DATA.law_nodes  : [], term).map(n => ({...n, is_case: false}));
   const cases = searchNodes(DATA ? DATA.case_nodes : [], term).map(n => ({...n, is_case: true}));
-  const pool  = [...cases.slice(0, 10), ...laws.slice(0, 20)];
+  const pool  = [...cases, ...laws];
   renderResults('res2', pool, 'mixed');
   const t = term.trim().toLowerCase();
   if (t) {
@@ -1948,8 +1975,8 @@ function searchNodes(nodes, term) {
       n.id    || '',
     ].map(s => s.toLowerCase());
     if (!haystack.some(s => s.includes(term))) return null;
-    // Score: 0=no match, 1=id/label only, 2=name substring, 3=name word-boundary, 4=name starts-with
-    const nameFields = haystack.slice(0, 2);  // LAW_NAMES, CASE_NAMES
+    // Score: 1=id only, 2=human-name substring, 3=word-boundary, 4=starts-with
+    const nameFields = haystack.slice(0, 4);  // LAW_NAMES, CASE_NAMES, label, name
     const wordRe = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
     let score = 1;
     if (nameFields.some(s => s.includes(term)))            score = 2;
@@ -1965,32 +1992,29 @@ function renderResults(containerId, pool, mode) {
   const out = document.getElementById(containerId);
   if (!pool.length) { out.innerHTML = '<div class="result-empty">no matches</div>'; return; }
   out.innerHTML = pool.map((n, i) => {
-    const humanName = getNodeNameShort(n);
-    // Laws: human-readable name in gold. Cases: case name in gold.
-    const display  = humanName && humanName !== n.id
-      ? `<b style="color:var(--gold)">${esc(humanName)}</b>`
-      : n.is_case
-        ? esc(n.label || n.id)
-        : esc(n.id);
-    const isCase   = !!n.is_case;
-    const typeTag  = isCase ? 'CASE' : 'LAW';
-    const typeCol  = isCase ? '#4361ee' : '#2a9d8f';
-    const ttLabel  = isCase ? (n.label || n.id) : n.id;
-    return `<div class="result-row" data-id="${esc(n.id)}" data-tt="${esc(ttLabel)}" title="">
+    const humanName = getNodeNameShort(n) || n.label || n.name || n.id;
+    const isCase    = !!n.is_case;
+    const typeTag   = isCase ? 'CASE' : 'LAW';
+    const typeCol   = isCase ? '#4361ee' : '#2a9d8f';
+    const tooltip   = isCase ? (n.label || n.id) : n.id;
+    return `<div class="result-row" data-id="${esc(n.id)}" data-tt="${esc(tooltip)}" title="">
        <span class="rn">${String(i + 1).padStart(2, '0')}</span>
        <span class="rt" style="color:${typeCol}">${typeTag}</span>
-       <span>${display}</span>
+       <span><b style="color:var(--gold)">${esc(humanName)}</b></span>
      </div>`;
   }).join('');
   out.querySelectorAll('.result-row').forEach(row => {
     row.addEventListener('click', () => {
       const n = NODE_MAP[row.dataset.id]
+        || resolveNode(row.dataset.id)
         || DATA.law_nodes.find(x => x.id === row.dataset.id)
-        || DATA.case_nodes.find(x => x.id === row.dataset.id);
+        || DATA.case_nodes.find(x => x.id === row.dataset.id)
+        || IMPLICIT_NODES_FULL.find(x => x.id === row.dataset.id)
+        || IMPLICIT_CASE_FULL.find(x => x.id === row.dataset.id);
       if (!n) return;
       // If the node isn't in the current view, switch to the right one
       if (n.is_case && VIEW !== 'case' && !NODE_MAP[n.id]) {
-        // Node is a case not present in the current view — switch to law-case tab
+        // Case not in current view — switch to law-case tab
         document.querySelector('.view-tab[data-view="case"]').click();
         setTimeout(() => selectAndCenter(NODE_MAP[n.id] || n), 400);
       } else {

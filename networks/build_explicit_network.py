@@ -359,8 +359,8 @@ def main() -> None:
     ap.add_argument("--laws",   type=Path, default=DATA / "laws.csv")
     ap.add_argument("--cases",  type=Path, default=DATA / "cases.csv")
     ap.add_argument("--output", type=Path, default=NETWORKS / "explicit_network_data.json")
-    ap.add_argument("--tier",   type=int,  default=1,
-                    help="Only include laws with this inclusion_tier (default 1). Pass 0 for all.")
+    ap.add_argument("--tier",   type=int,  default=0,
+                    help="Only include laws with this inclusion_tier. Pass 0 (default) for all.")
     args = ap.parse_args()
 
     laws_df  = load_laws(args.laws, tier=args.tier if args.tier > 0 else None)
