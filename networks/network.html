@@ -556,20 +556,7 @@ const EDGE_LABEL = {
 const CITATION_TYPES = new Set(['amends','repeals','implicitly_repeals','implements','completes','corrects','body_citation']);
 
 // Friendly names for key EU digital laws (CELEX → short name)
-const KNOWN_LAWS = {
-  '32024R1689':'AI Act',    '32022L2557':'CER',        '32024L1385':'CGBVD',
-  '12007P':    'Charter',   '32024R2847':'CRA',        '32019R0881':'CSA',
-  '32025R0038':'CSoldAct',  '32014R0536':'CTR',        '32023R2854':'Data Act',
-  '32022R0868':'DGA',       '32022R1925':'DMA',        '32022R2554':'DORA',
-  '32022R2065':'DSA',       '32018L1972':'EECC',       '32025R0327':'EHDS',
-  '32024R1083':'EMFA',      '32002L0058':'ePD',        '32014R0910':'eIDAS',
-  '32018R1725':'EUDPR',     '32018R1807':'FFONPDR',    '32016R0679':'GDPR',
-  '32025R2518':'GDPREnforcement', '32024R0903':'IEA',  '32016L0680':'LED',
-  '32023R1230':'MachReg',   '32017R0745':'MDR',        '32019R1020':'MSR',
-  '32022L2555':'NIS2',      '32019L1024':'ODD',        '32024L2853':'PLD',
-  '32015L2366':'PSD2',      '32024L2831':'PWD',        '32025R2509':'TSR',
-  '32024R0900':'TTPAR',
-};
+// KNOWN_LAWS removed — use LAW_NAMES (loaded from CSV via /api/law_names) for all law name lookups
 
 // 20 group colours (index matches DATA.meta.groups order)
 const GROUP_COLORS = [
@@ -755,7 +742,7 @@ function getNodeName(n) {
     const key = n.label || n.name || n.id;
     return CASE_NAMES[key] || n.case_name || n.name || n.label || n.id;
   }
-  return LAW_NAMES[n.id] || KNOWN_LAWS[n.id] || n.name || n.label || n.id;
+  return LAW_NAMES[n.id] || n.name || n.label || n.id;
 }
 
 function getNodeNameShort(n) {
@@ -1218,6 +1205,11 @@ function nbSet() {
   edges.forEach(e => {
     const sid = typeof e.source === 'object' ? e.source.id : e.source;
     const tid = typeof e.target === 'object' ? e.target.id : e.target;
+    // In implicit view, respect the active connection-type filter
+    if (VIEW === 'implicit' && _connFilter !== 'all') {
+      if (_connFilter === 'case' && !e.is_case_edge) return;
+      if (_connFilter === 'law'  &&  e.is_case_edge) return;
+    }
     if (sid === SELECTED.id) s.add(tid);
     if (tid === SELECTED.id) s.add(sid);
   });
@@ -1295,15 +1287,26 @@ function draw() {
       : (EDGE_COLOR[e.type] || '#888');
     CTX.strokeStyle = hexAlpha(hex, alpha);
     CTX.lineWidth   = lw / TRANSFORM.k;
+    if (e.score != null) {
+      const d = 4 / TRANSFORM.k;
+      CTX.setLineDash([d, d]);
+    } else {
+      CTX.setLineDash([]);
+    }
     CTX.beginPath();
     CTX.moveTo(s.x, s.y);
     CTX.lineTo(t.x, t.y);
     CTX.stroke();
   }
+  CTX.setLineDash([]);
 
   // Draw RELATED_EDGES (from /api/related) — show live connections for selected node
   if (VIEW === 'implicit' && SELECTED && RELATED_EDGES.length) {
+    const d = 4 / TRANSFORM.k;
+    CTX.setLineDash([d, d]);
     for (const e of RELATED_EDGES) {
+      if (_connFilter === 'case' && !e.is_case_edge) continue;
+      if (_connFilter === 'law'  &&  e.is_case_edge) continue;
       const s = NODE_MAP[typeof e.source === 'object' ? e.source.id : e.source];
       const t = NODE_MAP[typeof e.target === 'object' ? e.target.id : e.target];
       if (!s || !t || s.x == null || t.x == null) continue;
@@ -1312,6 +1315,7 @@ function draw() {
       CTX.lineWidth   = (0.8 + e.score * 1.2) / TRANSFORM.k;
       CTX.beginPath(); CTX.moveTo(s.x, s.y); CTX.lineTo(t.x, t.y); CTX.stroke();
     }
+    CTX.setLineDash([]);
   }
 
   // --- nodes ---
@@ -1676,6 +1680,7 @@ function wireEvents() {
           if (chunks?.classList.contains('nb-chunks') && !show) chunks.style.display = 'none';
         }
       });
+      if (VIEW === 'implicit') draw();
       return;
     }
 
@@ -1783,7 +1788,6 @@ function doSearch1(term) {
   if (t) {
     const allNodes = [...(DATA.law_nodes || [])];
     QUERY_FOCUS_IDS = new Set(allNodes.filter(n =>
-      (KNOWN_LAWS[n.id]  || '').toLowerCase().includes(t) ||
       (LAW_NAMES[n.id]   || '').toLowerCase().includes(t) ||
       (n.label || '').toLowerCase().includes(t) ||
       (n.name  || '').toLowerCase().includes(t) ||
@@ -1899,8 +1903,8 @@ async function doSemanticSearch(term) {
 }
 
 function doSearch2(term) {
-  const laws  = searchNodes(DATA ? DATA.law_nodes  : [], term);
-  const cases = searchNodes(DATA ? DATA.case_nodes : [], term);
+  const laws  = searchNodes(DATA ? DATA.law_nodes  : [], term).map(n => ({...n, is_case: false}));
+  const cases = searchNodes(DATA ? DATA.case_nodes : [], term).map(n => ({...n, is_case: true}));
   const pool  = [...cases.slice(0, 10), ...laws.slice(0, 20)];
   renderResults('res2', pool, 'mixed');
   const t = term.trim().toLowerCase();
@@ -1908,8 +1912,7 @@ function doSearch2(term) {
     const allNodes = [...(DATA.law_nodes || []), ...(DATA.case_nodes || [])];
     QUERY_FOCUS_IDS = new Set(allNodes.filter(n => {
       const caseKey = n.label || n.name || n.id;
-      return (KNOWN_LAWS[n.id]    || '').toLowerCase().includes(t) ||
-             (LAW_NAMES[n.id]     || '').toLowerCase().includes(t) ||
+      return (LAW_NAMES[n.id]     || '').toLowerCase().includes(t) ||
              (CASE_NAMES[caseKey] || '').toLowerCase().includes(t) ||
              (n.label || '').toLowerCase().includes(t) ||
              (n.name  || '').toLowerCase().includes(t) ||
@@ -1933,15 +1936,11 @@ function searchNodes(nodes, term) {
       degMap[s] = (degMap[s] || 0) + 1;
       degMap[t] = (degMap[t] || 0) + 1;
     }
-    const known  = nodes.filter(n =>  KNOWN_LAWS[n.id]);
-    const others = nodes.filter(n => !KNOWN_LAWS[n.id])
-                        .sort((a, b) => (degMap[b.id] || 0) - (degMap[a.id] || 0));
-    return [...known, ...others];   // all nodes, no cap
+    return [...nodes].sort((a, b) => (degMap[b.id] || 0) - (degMap[a.id] || 0));
   }
   const matched = nodes.map(n => {
     const caseKey  = n.label || n.name || n.id;
     const haystack = [
-      KNOWN_LAWS[n.id]    || '',
       LAW_NAMES[n.id]     || '',
       CASE_NAMES[caseKey] || '',
       n.label || '',
@@ -1950,7 +1949,7 @@ function searchNodes(nodes, term) {
     ].map(s => s.toLowerCase());
     if (!haystack.some(s => s.includes(term))) return null;
     // Score: 0=no match, 1=id/label only, 2=name substring, 3=name word-boundary, 4=name starts-with
-    const nameFields = haystack.slice(0, 3);  // KNOWN_LAWS, LAW_NAMES, CASE_NAMES
+    const nameFields = haystack.slice(0, 2);  // LAW_NAMES, CASE_NAMES
     const wordRe = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
     let score = 1;
     if (nameFields.some(s => s.includes(term)))            score = 2;
@@ -1973,10 +1972,11 @@ function renderResults(containerId, pool, mode) {
       : n.is_case
         ? esc(n.label || n.id)
         : esc(n.id);
-    const isCase   = n.is_case || (mode === 'mixed' && n.subject_matter);
+    const isCase   = !!n.is_case;
     const typeTag  = isCase ? 'CASE' : 'LAW';
     const typeCol  = isCase ? '#4361ee' : '#2a9d8f';
-    return `<div class="result-row" data-id="${esc(n.id)}">
+    const ttLabel  = isCase ? (n.label || n.id) : n.id;
+    return `<div class="result-row" data-id="${esc(n.id)}" data-tt="${esc(ttLabel)}" title="">
        <span class="rn">${String(i + 1).padStart(2, '0')}</span>
        <span class="rt" style="color:${typeCol}">${typeTag}</span>
        <span>${display}</span>
@@ -2071,7 +2071,7 @@ function selectNode(n, { skipFulltext = false } = {}) {
     document.getElementById('cConn').textContent = '…';
     connEl.innerHTML = '<div class="empty-state"><div class="icon">[…]</div><p>Loading…</p></div>';
 
-    fetch(`/api/related?doc_id=${encodeURIComponent(docId)}&threshold=${threshold}`)
+    fetch(`/api/related?doc_id=${encodeURIComponent(docId)}&threshold=${threshold}&exclude_explicit=true`)
       .then(r => r.json())
       .then(data => {
         if (SELECTED !== n) return; // node changed while loading
@@ -2114,7 +2114,7 @@ function selectNode(n, { skipFulltext = false } = {}) {
           const rawLbl    = x.title || sharedNum || corpusId;
           const humanLbl  = isCase
             ? (CASE_NAMES[sharedNum] || CASE_NAMES[corpusId] || rawLbl)
-            : (KNOWN_LAWS[displayId] || LAW_NAMES[displayId] || rawLbl);
+            : (LAW_NAMES[displayId] || rawLbl);
           const subLbl    = isCase ? (sharedNum || corpusId) : corpusId;
           const pct    = Math.round(x.score * 100);
           const qid    = n.corpus_id || n.id;  // corpus_id = ECLI for case nodes
@@ -2276,7 +2276,7 @@ function openRelatedPopup(othNode, fromId) {
   logEvent('related_popup', { document_id: (fromId || '') + ' <> ' + othNode.id });
   const popup = document.getElementById('ctxPopup');
   document.getElementById('ctxPopupType').textContent = othNode.is_case ? 'Related Case' : 'Related Law';
-  const popupTitle = (othNode.is_case ? (othNode.case_name || othNode.name || othNode.label) : (KNOWN_LAWS[othNode.id] || othNode.name || othNode.label)) || othNode.id;
+  const popupTitle = (othNode.is_case ? (othNode.case_name || othNode.name || othNode.label) : (LAW_NAMES[othNode.id] || othNode.name || othNode.label)) || othNode.id;
   const titleEl = document.getElementById('ctxPopupTitle');
   titleEl.textContent = popupTitle;
   titleEl.setAttribute('data-tt', popupTitle);

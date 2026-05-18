@@ -146,7 +146,8 @@ _implicit_pairs   = []      # [{source, target, score}] law-law semantic pairs
 _implicit_nodes   = []      # [{id, label, name, group, …}] law nodes
 _implicit_case_pairs = []   # [{source (case), target (law), score}] case-law semantic pairs
 _implicit_case_nodes = []   # [{id, label, name, is_case:True, …}] case nodes
-_explicit_pair_set = set()  # {(min_id, max_id)} explicit pairs to exclude
+_explicit_pair_set      = set()  # {(min_id, max_id)} explicit law-law pairs to exclude
+_explicit_case_law_pairs = set() # {(case_id, law_id)} explicit case-law pairs to exclude
 _dense_normed     = None    # (n_chunks, dim) — all corpus chunk vectors, L2-normalised
 
 BOILERPLATE_HEADERS = [
@@ -271,7 +272,7 @@ def load_data(threshold: float):
 
 
 def _build_implicit_network():
-    global _implicit_pairs, _implicit_nodes, _explicit_pair_set
+    global _implicit_pairs, _implicit_nodes, _explicit_pair_set, _explicit_case_law_pairs
     global _implicit_case_pairs, _implicit_case_nodes
     global _dense_normed
 
@@ -294,17 +295,34 @@ def _build_implicit_network():
                 _explicit_pair_set.add((min(a, b), max(a, b)))
             # Also blacklist explicit case-law citations so they don't appear as
             # implicit semantic edges too (same connection shown in two views).
-            _explicit_case_law_pairs = set()
-            for e in ex.get("case_law_edges", []):
-                _explicit_case_law_pairs.add((str(e["source"]), str(e["target"])))
+            # Edges store CELEX case IDs (e.g. 62017CJ0319) but the implicit loop
+            # compares against _docs["parent_id"] which uses ECLI.  Build a lookup
+            # label (C-319/20) → ECLI from _docs so we can translate at load time.
             explicit_node_map      = {n["id"]: n for n in ex.get("law_nodes",  [])}
             explicit_case_node_map = {n["id"]: n for n in ex.get("case_nodes", [])}
+            _snum_to_ecli: dict = {}
+            if _docs is not None:
+                _case_rows = _docs[_docs["source"] == "caselaw"]
+                _snum_to_ecli = dict(zip(_case_rows["shared_num"], _case_rows["parent_id"]))
+            ecli_hits = 0
+            for e in ex.get("case_law_edges", []):
+                celex_case = str(e["source"])
+                law_id     = str(e["target"])
+                # Always store CELEX-keyed pair as fallback
+                _explicit_case_law_pairs.add((celex_case, law_id))
+                # Translate CELEX → shared case label → ECLI
+                node  = explicit_case_node_map.get(celex_case, {})
+                label = node.get("label") or node.get("name") or ""
+                ecli  = _snum_to_ecli.get(label)
+                if ecli:
+                    _explicit_case_law_pairs.add((ecli, law_id))
+                    ecli_hits += 1
             print(f"  [implicit] {len(_explicit_pair_set)} explicit law-law pairs blacklisted, "
-                  f"{len(_explicit_case_law_pairs)} explicit case-law pairs blacklisted, "
+                  f"{len(_explicit_case_law_pairs)} explicit case-law pairs blacklisted "
+                  f"({ecli_hits} ECLI-translated), "
                   f"{len(explicit_node_map)} law nodes, {len(explicit_case_node_map)} case nodes loaded")
             break
     else:
-        _explicit_case_law_pairs = set()
         print("  [implicit] explicit_network_data.json not found — blacklist skipped")
 
     # ── Law-law semantic similarity ───────────────────────────────────────
@@ -442,7 +460,7 @@ def _build_implicit_network():
                 key = (case_parent_ids[i], parent_ids[j])
                 if key in seen_pairs:
                     continue
-                # Skip pairs already represented by an explicit citation
+                # Blacklist contains (ECLI, law_CELEX) pairs translated at load time
                 if key in _explicit_case_law_pairs:
                     continue
                 seen_pairs.add(key)
@@ -642,8 +660,9 @@ def api_related():
     """Given a selected law or case doc_id, return all other docs whose best
     chunk scores >= threshold against the query document's mean embedding.
     Mirrors the notebook's cell ⑤ logic, applied to the full corpus."""
-    doc_id    = request.args.get("doc_id", "").strip()
-    threshold = float(request.args.get("threshold", DEFAULT_THRESHOLD))
+    doc_id           = request.args.get("doc_id", "").strip()
+    threshold        = float(request.args.get("threshold", DEFAULT_THRESHOLD))
+    exclude_explicit = request.args.get("exclude_explicit", "false").lower() == "true"
     if not doc_id:
         return jsonify({"error": "need doc_id"}), 400
     if _dense_normed is None:
@@ -660,8 +679,12 @@ def api_related():
     if q_rows.empty:
         return jsonify({"error": f"'{doc_id}' not found in corpus"}), 404
 
+    q_meta   = q_rows.iloc[0]
+    q_pid    = q_meta["parent_id"]
+    q_source = q_meta["source"]   # "legislation" | "caselaw"
+
     # Mean embedding of query document, normalised
-    q_idxs = q_rows.iloc[0]["chunk_indices"]
+    q_idxs = q_meta["chunk_indices"]
     q_vecs  = _dense_vecs[q_idxs].astype(np.float32)
     q_mean  = q_vecs.mean(axis=0)
     norm    = np.linalg.norm(q_mean)
@@ -672,7 +695,9 @@ def api_related():
 
     results = []
     for _, doc in _docs.iterrows():
-        if doc["parent_id"] == q_rows.iloc[0]["parent_id"]:
+        r_pid    = doc["parent_id"]
+        r_source = doc["source"]
+        if r_pid == q_pid:
             continue
         idxs        = doc["chunk_indices"]
         chunk_scores = all_scores[idxs]
@@ -680,10 +705,20 @@ def api_related():
         best_score  = float(chunk_scores[best_pos])
         if best_score < threshold:
             continue
+        if exclude_explicit:
+            if q_source == "legislation" and r_source == "legislation":
+                if (min(q_pid, r_pid), max(q_pid, r_pid)) in _explicit_pair_set:
+                    continue
+            elif q_source == "caselaw" and r_source == "legislation":
+                if (q_pid, r_pid) in _explicit_case_law_pairs:
+                    continue
+            elif q_source == "legislation" and r_source == "caselaw":
+                if (r_pid, q_pid) in _explicit_case_law_pairs:
+                    continue
         best_chunk = str(_corpus.iloc[idxs[best_pos]]["text"])
         results.append({
-            "parent_id":       doc["parent_id"],
-            "source":          doc["source"],
+            "parent_id":       r_pid,
+            "source":          r_source,
             "shared_num":      doc["shared_num"],
             "title":           doc["title"],
             "score":           round(best_score, 4),
@@ -781,17 +816,16 @@ def _fulltext_fallback(parent_id: str, source: str) -> str:
 def api_log_event():
     data = request.get_json(force=True) or {}
     ip   = request.headers.get("X-Forwarded-For", request.remote_addr)
-    with open(LOG_PATH, "a", newline="", encoding="utf-8") as _f:
-        csv.writer(_f).writerow([
-            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            ip,
-            "EVENT",
-            data.get("event_type", ""),
-            "",
-            data.get("search_query", ""),
-            data.get("search_threshold", ""),
-            data.get("document_id", ""),
-        ])
+    _append_log([
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        ip,
+        "EVENT",
+        data.get("event_type", ""),
+        "",
+        data.get("search_query", ""),
+        data.get("search_threshold", ""),
+        data.get("document_id", ""),
+    ])
     return jsonify({"ok": True})
 
 
