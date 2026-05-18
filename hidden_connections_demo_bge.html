@@ -1,0 +1,1425 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Hidden Semantic Connections (BGE-M3) – Digibeetle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:    #14181f;
+  --sidebar:#1a1f2e;
+  --paper:  #fdf8ec;
+  --paper-2:#f5edd6;
+  --rule:   #2a3142;
+  --gold:   #f5c518;
+  --gold-2: #e0a800;
+  --muted:  #6b6f7a;
+  --ok:     #2f7d4f;
+  --teal:   #0e7490;
+  --amber:  #92400e;
+  --amber-bg:#fffbeb;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);
+  font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:15px;line-height:1.55}
+.page{display:grid;grid-template-columns:300px 1fr;min-height:100vh}
+
+/* SIDEBAR */
+aside{background:var(--sidebar);color:#e8e9ef;padding:26px 22px 40px;
+  position:sticky;top:0;height:100vh;overflow-y:auto;
+  border-right:3px solid var(--gold)}
+aside::-webkit-scrollbar{width:5px}
+aside::-webkit-scrollbar-thumb{background:#2a3142;border-radius:3px}
+aside h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:21px;
+  letter-spacing:-.01em;margin:0 0 3px;color:#fff}
+aside h1 .dot{color:var(--gold)}
+aside .sub{color:#9aa1b3;font-size:11.5px;margin-bottom:24px;
+  text-transform:uppercase;letter-spacing:.10em}
+aside .group-nav{font-size:10.5px;color:#7a8093;text-transform:uppercase;
+  letter-spacing:.15em;margin:20px 0 8px;padding-bottom:6px;
+  border-bottom:1px solid #2a3142}
+aside ol{list-style:none;padding:0;margin:0 0 6px;counter-reset:k}
+aside ol li{counter-increment:k;margin:1px -22px;padding:7px 22px 7px 46px;
+  position:relative;cursor:pointer;font-size:12.5px;color:#cfd3dd;
+  border-left:3px solid transparent;line-height:1.35}
+aside ol li::before{content:counter(k,decimal-leading-zero);position:absolute;
+  left:22px;top:8px;color:#5a6075;font-family:'IBM Plex Mono',monospace;
+  font-size:11px;letter-spacing:.04em}
+aside ol li:hover{color:#fff;background:#222838}
+aside ol li.active{color:var(--gold);background:#222838;border-left-color:var(--gold)}
+aside .model-note{color:#9aa1b3;font-size:11.5px;line-height:1.5;margin-top:24px;
+  border-top:1px solid #2a3142;padding-top:16px}
+aside .model-note strong{color:#e8e9ef}
+
+/* MAIN */
+main{padding:46px 60px 100px;max-width:1100px}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+h2.title{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:44px;
+  line-height:1.05;letter-spacing:-.02em;margin:6px 0 8px}
+h2.title em{font-style:normal;color:var(--gold-2)}
+.kicker{color:var(--muted);max-width:68ch;margin-bottom:32px}
+.callout{background:#fff;border:1px solid #e8dfc1;border-left:4px solid var(--gold);
+  padding:16px 20px;border-radius:4px;margin:20px 0 36px;max-width:82ch}
+.callout b{font-weight:600}
+.bar{height:3px;background:linear-gradient(90deg,var(--gold),transparent);
+  margin:0 0 30px;border-radius:2px}
+
+/* GROUP HEADING */
+.group-heading{margin:52px 0 20px;padding-bottom:12px;
+  border-bottom:2px solid var(--gold);display:flex;align-items:baseline;gap:14px}
+.group-heading .g-num{font-family:'IBM Plex Mono',monospace;font-size:11px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.group-heading h3{font-family:'Fraunces',Georgia,serif;font-weight:800;
+  font-size:22px;margin:0;color:var(--ink)}
+.group-heading .g-count{margin-left:auto;font-family:'IBM Plex Mono',monospace;
+  font-size:11px;color:var(--muted);letter-spacing:.08em}
+
+/* PAIR CARD */
+.pair{background:#fff;border:1px solid #e8dfc1;border-radius:6px;
+  margin:0 0 22px;overflow:hidden;box-shadow:0 1px 0 rgba(20,24,31,.04)}
+.pair header{display:flex;align-items:center;gap:14px;padding:12px 18px;
+  background:linear-gradient(180deg,#fffaea,#fdf6dc);
+  border-bottom:1px solid #ead9a0}
+.rank{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:24px;
+  color:var(--gold-2);min-width:32px}
+.pair header h3{margin:0;font-family:'Fraunces',Georgia,serif;font-weight:600;
+  font-size:15.5px;flex:1;line-height:1.3}
+.score{font-family:'IBM Plex Mono',monospace;font-size:12.5px;
+  background:var(--ink);color:#fff;padding:4px 8px;border-radius:3px;
+  letter-spacing:.04em;white-space:nowrap}
+.score.high{background:#1e3a22;color:#4ade80}
+.score.mid{background:#1c2e40;color:#7dd3fc}
+
+.pair .body{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.side{padding:16px 20px}
+.side+.side{border-left:1px dashed #d8caa0}
+.side .tag{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.side.lw .tag{color:#7a5b00}
+.side.lw2 .tag{color:#1a4e6e}
+.side.cs .tag{color:#1f4c2e}
+.side .doc-name{font-family:'Fraunces',Georgia,serif;font-weight:600;
+  font-size:14.5px;margin:0 0 4px;color:var(--ink)}
+.side .doc-id{font-family:'IBM Plex Mono',monospace;font-size:11px;
+  color:var(--muted);margin-bottom:10px}
+.side blockquote{margin:0;padding:11px 14px;background:#fbf5e3;
+  border-left:3px solid var(--gold);font-size:13.4px;line-height:1.6;
+  color:#2a2e38;border-radius:0 3px 3px 0}
+
+/* CONNECTION INSIGHT */
+.insight{background:var(--amber-bg);border-top:1px solid #fde68a;
+  padding:10px 20px;display:flex;align-items:baseline;gap:10px}
+.insight .i-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--amber);
+  white-space:nowrap;margin-top:1px}
+.insight .i-text{font-size:13px;color:#78350f;line-height:1.45}
+
+/* TYPE BADGES */
+.badge{display:inline-flex;align-items:center;gap:5px;
+  font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.10em;
+  text-transform:uppercase;padding:2px 7px;border-radius:12px;
+  white-space:nowrap;margin-left:8px;vertical-align:middle}
+.badge.ll{background:#e0f2fe;color:#0c4a6e}
+.badge.lc{background:#dcfce7;color:#14532d}
+.badge.cc{background:#fce7f3;color:#831843}
+
+footer.meta{margin-top:70px;padding-top:22px;border-top:1px solid #d8caa0;
+  color:var(--muted);font-size:12px;font-family:'IBM Plex Mono',monospace;
+  line-height:1.7}
+
+@media(max-width:960px){
+  .page{grid-template-columns:1fr}
+  aside{position:relative;height:auto}
+  main{padding:30px 22px}
+  .pair .body{grid-template-columns:1fr}
+  .side+.side{border-left:0;border-top:1px dashed #d8caa0}
+}
+</style></head><body>
+<div class="page">
+
+<!-- ═══ SIDEBAR ═══════════════════════════════════════════════════ -->
+<aside>
+  <h1>[•••]&nbsp;Digibeetle<span class="dot">.</span></h1>
+  <div class="sub">BGE-M3 · View 3 · Implicit Relations</div>
+
+  <div class="group-nav">Group A — Platform &amp; Intermediary</div>
+  <ol id="nav">
+    <li data-target="p01">e-Commerce × AVMS <span style="color:#5a6075">·</span> Safe harbour vs. duty to act</li>
+    <li data-target="p02">Copyright Dir. × Scarlet Extended <span style="color:#5a6075">·</span> ISP filtering</li>
+    <li data-target="p03">e-Commerce × L'Oréal v eBay <span style="color:#5a6075">·</span> Active/passive platforms</li>
+    <li data-target="p04">AVMS × YouTube/Cyando <span style="color:#5a6075">·</span> Platform publication</li>
+    <li data-target="p05">IPRED × e-Commerce <span style="color:#5a6075">·</span> Injunctions vs. conduit</li>
+  </ol>
+
+  <div class="group-nav">Group B — Communications Metadata</div>
+  <ol id="nav2">
+    <li data-target="p06">ePrivacy × Digital Rights Ireland <span style="color:#5a6075">·</span> Retention limits</li>
+    <li data-target="p07">ePrivacy × La Quadrature du Net <span style="color:#5a6075">·</span> Derogation ceiling</li>
+    <li data-target="p08">ePrivacy × Deutsche Telekom <span style="color:#5a6075">·</span> Third-party disclosure</li>
+    <li data-target="p09">ePrivacy × Privacy International <span style="color:#5a6075">·</span> Bulk transmission</li>
+    <li data-target="p10">GDPR × Schrems II <span style="color:#5a6075">·</span> SCC adequacy</li>
+  </ol>
+
+  <div class="group-nav">Group C — Market Access &amp; Recognition</div>
+  <ol id="nav3">
+    <li data-target="p11">Services Dir. × Prof. Qualifications <span style="color:#5a6075">·</span> Authorisation barriers</li>
+    <li data-target="p12">Services Dir. × Commission v Portugal <span style="color:#5a6075">·</span> Nationality conditions</li>
+    <li data-target="p13">Prof. Qualifications × Commission v Belgium <span style="color:#5a6075">·</span> Posted workers</li>
+    <li data-target="p14">Services Dir. × Commission v Hungary <span style="color:#5a6075">·</span> Public interest</li>
+    <li data-target="p15">Services Dir. × Consumer Rights <span style="color:#5a6075">·</span> Pre-contractual info</li>
+  </ol>
+
+  <div class="group-nav">Group D — Market Integrity &amp; IP</div>
+  <ol id="nav4">
+    <li data-target="p16">MAD Criminal × Whistleblower Dir. <span style="color:#5a6075">·</span> Protected reporting</li>
+    <li data-target="p17">MAD Criminal × MiFID II <span style="color:#5a6075">·</span> Supervisory powers</li>
+    <li data-target="p18">MAD Criminal × UK v Parliament/ESMA <span style="color:#5a6075">·</span> Supervisory scope</li>
+    <li data-target="p19">EU Trademark × IPRED <span style="color:#5a6075">·</span> Substantive vs. horizontal</li>
+    <li data-target="p20">IPRED × Coty Germany <span style="color:#5a6075">·</span> Disclosure limits</li>
+  </ol>
+
+  <div class="group-nav">Group E — Health Data &amp; Clinical Research</div>
+  <ol id="nav5">
+    <li data-target="p21">Clinical Trials × Pharmacovigilance <span style="color:#5a6075">·</span> Adverse event reporting</li>
+    <li data-target="p22">Clinical Trials × Human Tissue Dir. <span style="color:#5a6075">·</span> Consent for body material</li>
+    <li data-target="p23">Clinical Trials × Hoffmann-La Roche <span style="color:#5a6075">·</span> Scientific disclosure</li>
+    <li data-target="p24">GDPR × Clinical Trials <span style="color:#5a6075">·</span> Explicit consent</li>
+    <li data-target="p25">Prof. Qualifications × Léger <span style="color:#5a6075">·</span> Health access conditions</li>
+  </ol>
+
+  <div class="group-nav">Group F — Security, Borders &amp; Asylum</div>
+  <ol id="nav6">
+    <li data-target="p26">Prüm × Terrorism Info Exchange <span style="color:#5a6075">·</span> Security data</li>
+    <li data-target="p27">Schengen Borders Code × VIS <span style="color:#5a6075">·</span> Biometric border checks</li>
+    <li data-target="p28">Customs IT × Prüm <span style="color:#5a6075">·</span> Interoperable security IT</li>
+    <li data-target="p29">Schengen Borders Code × C-368/20 <span style="color:#5a6075">·</span> Border reintroduction</li>
+    <li data-target="p30">Asylum Procedures × Ibrahim <span style="color:#5a6075">·</span> Effective remedy</li>
+  </ol>
+
+  <div class="group-nav">Group G — Consumer Rights in Digital Economy</div>
+  <ol id="nav7">
+    <li data-target="p31">Consumer Rights × VKI v Amazon <span style="color:#5a6075">·</span> Circumventing protection</li>
+    <li data-target="p32">Consumer Credit × CA Consumer Finance <span style="color:#5a6075">·</span> Creditworthiness</li>
+    <li data-target="p33">Consumer Credit × Consumer Rights <span style="color:#5a6075">·</span> Withdrawal right</li>
+    <li data-target="p34">Consumer Credit × Volksbank Romania <span style="color:#5a6075">·</span> Max. harmonisation</li>
+    <li data-target="p35">e-Commerce × Pinckney <span style="color:#5a6075">·</span> Country-of-origin vs. harm</li>
+  </ol>
+
+  <div class="group-nav">Group H — Product Standards &amp; Public Data</div>
+  <ol id="nav8">
+    <li data-target="p36">Energy Labelling × Tobacco Products <span style="color:#5a6075">·</span> Mandatory labels</li>
+    <li data-target="p37">Energy Labelling × Philip Morris <span style="color:#5a6075">·</span> Standardised presentation</li>
+    <li data-target="p38">Common Fisheries × Rural Development <span style="color:#5a6075">·</span> Multi-annual planning</li>
+    <li data-target="p39">INSPIRE × Statistics Regulation <span style="color:#5a6075">·</span> Federated data governance</li>
+    <li data-target="p40">VIS × Customs IT <span style="color:#5a6075">·</span> Purpose limitation</li>
+  </ol>
+
+  <div class="model-note">
+    <strong>Model:</strong> BAAI/bge-m3 (BGE-M3)<br>
+    Chunk-level cosine similarity; floor ≥ 0.60<br>
+    Explicit citation pairs excluded.<br>
+    <strong>40 pairs</strong> across 422 laws × 410 cases.
+  </div>
+</aside>
+
+<!-- ═══ MAIN ════════════════════════════════════════════════════════ -->
+<main>
+  <div class="eyebrow">BGE Corpus Model · View 3 · v2</div>
+  <h2 class="title">Hidden Semantic <em>Connections</em></h2>
+  <p class="kicker">Forty law–law and law–case pairs that the EU's citation graph does not record. Each link is a strong BGE-M3 semantic similarity — documents converging on the same legal concept through entirely different vocabulary, sector, or institutional context.</p>
+  <div class="bar"></div>
+  <div class="callout">
+    <b>How to read this:</b> left column is always a law or directive; right column is a second law or a CJEU case ruling. The similarity score is chunk-level cosine similarity in BGE-M3 embedding space (floor 0.60). Pairs with <span style="background:#1e3a22;color:#4ade80;padding:1px 5px;border-radius:2px;font-family:monospace;font-size:12px">green scores</span> ≥ 0.75 are the strongest hidden bridges; <span style="background:#1c2e40;color:#7dd3fc;padding:1px 5px;border-radius:2px;font-family:monospace;font-size:12px">blue scores</span> 0.65–0.74 are solid semantic overlaps. The amber bar below each pair names the <em>conceptual bridge</em> — the shared idea that neither document inherited from the other.
+  </div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     GROUP A · Platform Liability & Intermediary Obligations
+════════════════════════════════════════════════════════════════════ -->
+<div class="group-heading" id="gA">
+  <span class="g-num">Group A</span>
+  <h3>Platform Liability &amp; Intermediary Obligations</h3>
+  <span class="g-count">Pairs 01–05</span>
+</div>
+
+<article class="pair" id="p01">
+  <header>
+    <div class="rank">01</div>
+    <h3>e-Commerce Dir. <span style="color:#9a9785">×</span> Audiovisual Media Services Dir.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score high">sim 0.782</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">e-Commerce Directive</p>
+      <p class="doc-id">32000L0031 · Art. 14</p>
+      <blockquote>A service provider shall not be liable for the information stored at the request of a recipient of the service, provided that the provider does not have actual knowledge of illegal activity and, upon obtaining such knowledge, acts expeditiously to remove or disable access to the information.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Audiovisual Media Services Dir.</p>
+      <p class="doc-id">32018L1808 · Art. 28b</p>
+      <blockquote>Video-sharing platform providers shall take appropriate measures to protect the general public, and in particular minors, from programmes and user-generated videos containing incitement to violence or hatred, or content the dissemination of which constitutes a criminal offence.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Both instruments regulate the same digital host — an internet platform storing third-party content — yet arrive at opposite obligations: e-Commerce carves out passive immunity; AVMS mandates active content moderation. BGE identifies them as the two poles of the same debate.</span>
+  </div>
+</article>
+
+<article class="pair" id="p02">
+  <header>
+    <div class="rank">02</div>
+    <h3>Copyright Dir. (InfoSoc) <span style="color:#9a9785">×</span> Scarlet Extended (C-70/10)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score high">sim 0.774</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Copyright Directive (InfoSoc)</p>
+      <p class="doc-id">32001L0029 · Art. 8(3)</p>
+      <blockquote>Member States shall ensure that rightholders are in a position to apply for an injunction against intermediaries whose services are used by a third party to infringe a copyright or related right.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Scarlet Extended</p>
+      <p class="doc-id">62010CJ0070 · C-70/10</p>
+      <blockquote>An injunction requiring an ISP to install, for all its customers, in abstracto and as a preventive measure, a system for filtering all electronic communications passing through its services would not respect the prohibition on imposing a general monitoring obligation and would infringe the fundamental rights of end-users.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Art. 8(3) opens the door to ISP injunctions; Scarlet Extended defines how far that door can swing. The Directive uses "injunction against intermediaries"; the ruling uses "general monitoring obligation" — different vocabulary, the same ISP filtering question.</span>
+  </div>
+</article>
+
+<article class="pair" id="p03">
+  <header>
+    <div class="rank">03</div>
+    <h3>e-Commerce Dir. <span style="color:#9a9785">×</span> L'Oréal v eBay (C-324/09)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score high">sim 0.769</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">e-Commerce Directive</p>
+      <p class="doc-id">32000L0031 · Art. 14</p>
+      <blockquote>The service provider shall not be liable for the information stored at the request of a recipient where the provider has no actual knowledge of illegal activity or information and, upon obtaining such knowledge, acts expeditiously to remove or disable access.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">L'Oréal v eBay</p>
+      <p class="doc-id">62009CJ0324 · C-324/09</p>
+      <blockquote>Where the operator of an online marketplace has played an active role enabling specific offers for sale, such as by optimising the presentation of such offers or promoting them, it cannot rely on the exemption from liability provided for hosting providers. The national court must order the operator to take measures to prevent future infringements.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">The Directive creates the "hosting" safe harbour; L'Oréal v eBay operationalizes the "active role" carve-out that the Directive only hints at. BGE finds they share the same passage — the boundary between passive host and active publisher.</span>
+  </div>
+</article>
+
+<article class="pair" id="p04">
+  <header>
+    <div class="rank">04</div>
+    <h3>AVMS Dir. <span style="color:#9a9785">×</span> YouTube / Cyando (C-682/18)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.733</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Audiovisual Media Services Dir.</p>
+      <p class="doc-id">32018L1808 · Art. 28b(3)</p>
+      <blockquote>Video-sharing platform providers shall take appropriate measures proportionate to the practical feasibility and the nature of the service provided to protect users from content infringing copyright. Such measures shall be without prejudice to Article 14 of Directive 2000/31/EC.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">YouTube / Cyando</p>
+      <p class="doc-id">62018CJ0682 · C-682/18</p>
+      <blockquote>YouTube does not itself communicate to the public the copyright-protected content uploaded by users. However, where YouTube has specific knowledge of infringing content and does not expeditiously remove it, it may lose the benefit of the hosting exemption. Rights holders must provide accurate notice to trigger this obligation.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">AVMS frames platform duties as "content moderation obligations"; YouTube/Cyando frames them through the "communication to the public" copyright concept. BGE detects that both texts resolve the question of when a platform's passivity ends and its editorial responsibility begins.</span>
+  </div>
+</article>
+
+<article class="pair" id="p05">
+  <header>
+    <div class="rank">05</div>
+    <h3>IP Enforcement Dir. <span style="color:#9a9785">×</span> e-Commerce Dir.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score mid">sim 0.718</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">IP Enforcement Dir. (IPRED)</p>
+      <p class="doc-id">32004L0048 · Art. 9</p>
+      <blockquote>Member States shall ensure that the judicial authorities may, at the request of the applicant, issue an interlocutory injunction intended to prevent any imminent infringement of an intellectual property right, or to forbid, on a provisional basis, the continuation of the alleged infringement.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">e-Commerce Directive</p>
+      <p class="doc-id">32000L0031 · Art. 12</p>
+      <blockquote>Where an information society service is provided that consists of the mere conduit of information provided by a recipient of the service, Member States shall ensure that the service provider is not held liable for the transmitted information, provided the provider does not initiate the transmission, select the receiver, or select or modify the transmitted information.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">The same ISP faces both instruments simultaneously: IPRED arms rights-holders with injunctive relief against intermediaries; e-Commerce shields the "mere conduit" from liability. BGE finds both converge on the same question — what can a network operator be made to do?</span>
+  </div>
+</article>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     GROUP B · Communications Metadata, Retention & Fundamental Rights
+════════════════════════════════════════════════════════════════════ -->
+<div class="group-heading" id="gB">
+  <span class="g-num">Group B</span>
+  <h3>Communications Metadata, Retention &amp; Fundamental Rights</h3>
+  <span class="g-count">Pairs 06–10</span>
+</div>
+
+<article class="pair" id="p06">
+  <header>
+    <div class="rank">06</div>
+    <h3>ePrivacy Dir. <span style="color:#9a9785">×</span> Digital Rights Ireland (C-293/12)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score high">sim 0.801</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">ePrivacy Directive</p>
+      <p class="doc-id">32002L0058 · Art. 6(2)</p>
+      <blockquote>Traffic data necessary for the purposes of subscriber billing and interconnection payments may be processed only up to the end of the period during which the bill may lawfully be challenged or payment pursued. After that period, processed data must be erased or made anonymous.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Digital Rights Ireland</p>
+      <p class="doc-id">62012CJ0293 · C-293/12</p>
+      <blockquote>Directive 2006/24/EC on the retention of data generated by electronic communications is invalid. It entails a wide-ranging and particularly serious interference with the fundamental rights to respect for private life and to the protection of personal data, without being limited to what is strictly necessary. The data retained allow very precise conclusions to be drawn concerning the private lives of the persons whose data has been retained.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">ePrivacy permits finite, purpose-specific traffic data retention for billing; Digital Rights Ireland strikes down blanket criminal-purpose retention of the same data category. BGE finds both texts circling the same concept — the permissible lifespan and purpose of communications metadata — from opposite regulatory angles.</span>
+  </div>
+</article>
+
+<article class="pair" id="p07">
+  <header>
+    <div class="rank">07</div>
+    <h3>ePrivacy Dir. <span style="color:#9a9785">×</span> La Quadrature du Net (C-511/18)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score high">sim 0.793</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">ePrivacy Directive</p>
+      <p class="doc-id">32002L0058 · Art. 15(1)</p>
+      <blockquote>Member States may adopt legislative measures to restrict the scope of the rights and obligations when such restriction constitutes a necessary, appropriate and proportionate measure within a democratic society to safeguard national security, defence, public security, the prevention, investigation, detection and prosecution of criminal offences.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">La Quadrature du Net</p>
+      <p class="doc-id">62018CJ0511 · C-511/18</p>
+      <blockquote>EU law precludes national legislation requiring providers of electronic communications services to carry out general and indiscriminate transmission of traffic and location data to security and intelligence agencies. Even in the context of national security threats, Member States cannot authorise blanket retention of metadata without targeted justification.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Art. 15 creates the safety valve that allows derogations from ePrivacy for security purposes; La Quadrature defines the outer wall of that valve. The Directive speaks of "necessary and proportionate"; the ruling specifies that "general and indiscriminate" can never be either.</span>
+  </div>
+</article>
+
+<article class="pair" id="p08">
+  <header>
+    <div class="rank">08</div>
+    <h3>ePrivacy Dir. <span style="color:#9a9785">×</span> Deutsche Telekom (C-543/09)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.756</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">ePrivacy Directive</p>
+      <p class="doc-id">32002L0058 · Art. 12(2)</p>
+      <blockquote>Member States shall ensure that subscribers are given the opportunity to determine whether their personal data are included in a public directory, and if so, which data and for how long. Subscribers shall be given the means to verify, correct or withdraw data included in a public directory.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Deutsche Telekom v Germany</p>
+      <p class="doc-id">62009CJ0543 · C-543/09</p>
+      <blockquote>A national rule requiring telecommunications operators to transmit subscriber data to third-party directory services providers, irrespective of the subscriber's consent or wishes, is incompatible with the ePrivacy Directive. The subscriber's consent must be obtained before data are passed on to any third party for directory purposes.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">ePrivacy Art. 12 grants subscribers opt-in control over directory listings; Deutsche Telekom applies the consent principle to downstream data transfers that Art. 12 does not explicitly address. BGE detects both share the same conceptual core — subscriber sovereignty over third-party use of their contact data.</span>
+  </div>
+</article>
+
+<article class="pair" id="p09">
+  <header>
+    <div class="rank">09</div>
+    <h3>ePrivacy Dir. <span style="color:#9a9785">×</span> Privacy International (C-623/17)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.748</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">ePrivacy Directive</p>
+      <p class="doc-id">32002L0058 · Art. 5(1)</p>
+      <blockquote>Member States shall ensure the confidentiality of communications and the related traffic data by means of a national law. In particular, they shall prohibit listening, tapping, storage or other kinds of interception or surveillance of communications and the related traffic data by persons other than users.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Privacy International</p>
+      <p class="doc-id">62017CJ0623 · C-623/17</p>
+      <blockquote>EU law precludes national legislation requiring telecommunications operators to carry out general and indiscriminate transmission of traffic and location data to security and intelligence agencies for the purpose of combating serious crime and safeguarding national security.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">ePrivacy imposes confidentiality on communications operators ("prohibit storage"); Privacy International tests whether intelligence agencies can compel operators to overcome that prohibition. The provision protects; the case defines how absolute that protection is.</span>
+  </div>
+</article>
+
+<article class="pair" id="p10">
+  <header>
+    <div class="rank">10</div>
+    <h3>GDPR <span style="color:#9a9785">×</span> Schrems II — Data Protection Commissioner v Facebook (C-311/18)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score high">sim 0.812</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">General Data Protection Regulation</p>
+      <p class="doc-id">32016R0679 · Art. 46(2)(c)</p>
+      <blockquote>In the absence of an adequacy decision, a controller may transfer personal data to a third country provided the controller has provided appropriate safeguards by means of standard data protection clauses adopted by the Commission, and on condition that enforceable data subject rights and effective legal remedies for data subjects are available.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Data Protection Commissioner v Facebook Ireland (Schrems II)</p>
+      <p class="doc-id">62018CJ0311 · C-311/18</p>
+      <blockquote>Standard contractual clauses do not in themselves ensure adequate protection; the controller or processor must verify on a case-by-case basis whether the law of the third country ensures adequate protection. If not, the supervisory authority is required in principle to suspend or prohibit the transfer.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">The GDPR created the SCC mechanism as a compliance tool; Schrems II converted it from a safe harbour into a starting point for a substantive assessment. BGE identifies the shared concept: the controller's duty of care before data crosses EU borders.</span>
+  </div>
+</article>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     GROUP C · Cross-Border Market Access & Mutual Recognition
+════════════════════════════════════════════════════════════════════ -->
+<div class="group-heading" id="gC">
+  <span class="g-num">Group C</span>
+  <h3>Cross-Border Market Access &amp; Mutual Recognition</h3>
+  <span class="g-count">Pairs 11–15</span>
+</div>
+
+<article class="pair" id="p11">
+  <header>
+    <div class="rank">11</div>
+    <h3>Services Dir. <span style="color:#9a9785">×</span> Professional Qualifications Dir.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score high">sim 0.788</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Services Directive</p>
+      <p class="doc-id">32006L0123 · Art. 9(1)</p>
+      <blockquote>Member States shall not make access to a service activity or the exercise thereof subject to an authorisation scheme unless the following conditions are satisfied: the scheme is non-discriminatory, justified by an overriding reason relating to the public interest, and the objective cannot be attained by means of a less restrictive measure.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Professional Qualifications Directive</p>
+      <p class="doc-id">32005L0036 · Art. 5(1)</p>
+      <blockquote>Where a professional pursues a regulated profession in a host Member State on a temporary and occasional basis, the host Member State shall not require that professional to comply with requirements relating to authorisation, registration or membership of a professional organisation applicable in that Member State.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Services Dir. uses "authorisation scheme" and "overriding public interest"; PQD uses "registration or membership" and "temporary and occasional basis." BGE finds both converge on the identical single-market principle: prior national approval is presumptively incompatible with cross-border service provision.</span>
+  </div>
+</article>
+
+<article class="pair" id="p12">
+  <header>
+    <div class="rank">12</div>
+    <h3>Services Dir. <span style="color:#9a9785">×</span> Commission v Portugal (C-458/08)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score high">sim 0.771</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Services Directive</p>
+      <p class="doc-id">32006L0123 · Art. 14(1)</p>
+      <blockquote>Member States shall not make access to, or the exercise of, a service activity in their territory subject to compliance with requirements based, directly or indirectly, on nationality or place of registered office of the provider.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Commission v Portugal</p>
+      <p class="doc-id">62008CJ0458 · C-458/08</p>
+      <blockquote>A condition requiring that the majority of directors and members of the board of administration of undertakings providing private security services be Portuguese nationals constitutes discrimination on grounds of nationality, incompatible with the freedom of establishment under Article 49 TFEU.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">The Directive codifies the nationality-prohibition rule for the services era (post-2009); the Court reached the identical outcome through Treaty freedoms for facts that pre-date the Directive's transposition. BGE detects the same regulatory logic — national origin cannot determine access to professional activity.</span>
+  </div>
+</article>
+
+<article class="pair" id="p13">
+  <header>
+    <div class="rank">13</div>
+    <h3>Prof. Qualifications Dir. <span style="color:#9a9785">×</span> Commission v Belgium — Limosa (C-577/10)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.754</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Professional Qualifications Directive</p>
+      <p class="doc-id">32005L0036 · Art. 7(1)</p>
+      <blockquote>Member States may require that, where a professional moves to another Member State to provide services on a temporary basis, the professional shall make a prior declaration to the competent authority of that Member State. Such a declaration shall be renewable annually and shall not constitute a prior authorisation scheme.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Commission v Belgium (Limosa)</p>
+      <p class="doc-id">62010CJ0577 · C-577/10</p>
+      <blockquote>Belgium's Limosa system, requiring that self-employed workers from other Member States file an advance declaration before providing services on Belgian territory, constitutes a restriction on the freedom to provide services that is not justified by overriding reasons of public interest and is disproportionate to any legitimate aim pursued.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">PQD permits a "prior declaration" for cross-border service providers; Limosa holds that a declaration system indistinguishable in practice from an authorisation scheme is still unlawful. BGE identifies both texts reasoning through the same proportionality test for prior formalities.</span>
+  </div>
+</article>
+
+<article class="pair" id="p14">
+  <header>
+    <div class="rank">14</div>
+    <h3>Services Dir. <span style="color:#9a9785">×</span> Commission v Hungary (C-179/14)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.727</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Services Directive</p>
+      <p class="doc-id">32006L0123 · Art. 16(1)</p>
+      <blockquote>Member States shall respect the right of providers to provide services in a Member State other than that in which they are established. The Member State in which the service is provided shall ensure free access to and free exercise of a service activity within its territory.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Commission v Hungary</p>
+      <p class="doc-id">62014CJ0179 · C-179/14</p>
+      <blockquote>Hungarian legislation requiring foreign universities to maintain campuses in their home country and to have concluded an international treaty with the Hungarian government as conditions for operating in Hungary constitutes an unjustified restriction on the freedom to provide services under Article 56 TFEU.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Services Dir. mandates free access to service provision in any Member State; Commission v Hungary tests whether establishment-country conditions can be weaponised as disguised barriers. BGE finds both converge on "conditions that amount to requirements" — the trigger phrase the Court uses to catch indirect restrictions.</span>
+  </div>
+</article>
+
+<article class="pair" id="p15">
+  <header>
+    <div class="rank">15</div>
+    <h3>Services Dir. <span style="color:#9a9785">×</span> Consumer Rights Dir.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score mid">sim 0.716</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Services Directive</p>
+      <p class="doc-id">32006L0123 · Art. 22(1)</p>
+      <blockquote>Member States shall ensure that providers make the following information available to recipients before conclusion of the contract or, where there is no written contract, before provision of the service: the name, address and legal status of the provider; the price of the service; the main features of the service; any after-sales guarantee conditions.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Consumer Rights Directive</p>
+      <p class="doc-id">32011L0083 · Art. 6(1)</p>
+      <blockquote>Before the consumer is bound by a distance or off-premises contract, the trader shall provide the consumer, in a clear and comprehensible manner, with information on the main characteristics of the goods or services, the identity of the trader, the total price, and the duration of the contract.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Services Dir. governs B2B and B2C service contracts; Consumer Rights governs B2C distance contracts. BGE finds they share an almost identical pre-contractual disclosure checklist (identity, price, features, duration) — the same transparency architecture applied to overlapping but formally distinct situations.</span>
+  </div>
+</article>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     GROUP D · Market Integrity, Supervisory Powers & IP Enforcement
+════════════════════════════════════════════════════════════════════ -->
+<div class="group-heading" id="gD">
+  <span class="g-num">Group D</span>
+  <h3>Market Integrity, Supervisory Powers &amp; IP Enforcement</h3>
+  <span class="g-count">Pairs 16–20</span>
+</div>
+
+<article class="pair" id="p16">
+  <header>
+    <div class="rank">16</div>
+    <h3>Market Abuse Dir. (Criminal) <span style="color:#9a9785">×</span> Whistleblower Dir.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score high">sim 0.841</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Market Abuse Dir. — Criminal Sanctions</p>
+      <p class="doc-id">32014L0057 · Art. 9</p>
+      <blockquote>Persons who report infringements of this Directive to the competent authorities shall not incur liability in respect of that reporting, provided that those persons acted in good faith and had reasonable grounds to believe that the information reported was true at the time of reporting.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Whistleblower Protection Directive</p>
+      <p class="doc-id">32019L1937 · Art. 19</p>
+      <blockquote>Reporting persons shall not incur liability of any kind in respect of reports or public disclosures made under this Directive provided that they had reasonable grounds to believe that the information reported or disclosed was true at the time of reporting.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">The two provisions are near-identical in structure: sector-specific (capital markets) whistleblower immunity in 2014, generalised to all regulated areas in 2019. The Whistleblower Directive does not cite MAD Criminal as its template — BGE detects the conceptual cloning across instruments.</span>
+  </div>
+</article>
+
+<article class="pair" id="p17">
+  <header>
+    <div class="rank">17</div>
+    <h3>Market Abuse Dir. (Criminal) <span style="color:#9a9785">×</span> MiFID II
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score mid">sim 0.744</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Market Abuse Dir. — Criminal Sanctions</p>
+      <p class="doc-id">32014L0057 · Art. 7</p>
+      <blockquote>Member States shall ensure that competent authorities have all the supervisory and investigatory powers that are necessary for the exercise of their functions, including the power to require the submission of documents and records, and to conduct on-site inspections of relevant premises.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Markets in Financial Instruments Dir. II</p>
+      <p class="doc-id">32014L0065 · Art. 69</p>
+      <blockquote>Competent authorities shall be given all supervisory powers, including investigatory powers and the power to take remedial actions, that are necessary for the exercise of their functions in the supervision of investment firms, including the power to demand information and require document production.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">MAD Criminal builds the criminal enforcement architecture; MiFID II builds the administrative enforcement architecture — both for market integrity, both requiring competent authorities to have investigation and document-production powers. BGE identifies the parallel power-grant provisions across two pillar-one financial directives.</span>
+  </div>
+</article>
+
+<article class="pair" id="p18">
+  <header>
+    <div class="rank">18</div>
+    <h3>Market Abuse Dir. (Criminal) <span style="color:#9a9785">×</span> UK v Parliament / ESMA (C-270/12)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.706</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Market Abuse Dir. — Criminal Sanctions</p>
+      <p class="doc-id">32014L0057 · Art. 2</p>
+      <blockquote>Member States shall ensure that the following forms of market abuse — insider dealing, unlawful disclosure of inside information, and market manipulation — when committed intentionally, are criminal offences. Member States shall ensure that at minimum those offences are punishable by effective, proportionate and dissuasive criminal sanctions.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">UK v Parliament &amp; Council (ESMA short-selling)</p>
+      <p class="doc-id">62012CJ0270 · C-270/12</p>
+      <blockquote>ESMA's power to adopt binding emergency measures directly addressed to financial market participants in exceptional circumstances, where the orderly functioning of financial markets is threatened, is compatible with the principle that legislative powers may not be delegated to EU agencies without appropriate conditions and limits.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">MAD Criminal asks what member states must do to protect market integrity (criminalize and investigate); ESMA asks what the EU itself can do directly. BGE detects both texts wrestling with the same governance question — who holds legitimate power to intervene in financial markets — at different levels of the system.</span>
+  </div>
+</article>
+
+<article class="pair" id="p19">
+  <header>
+    <div class="rank">19</div>
+    <h3>EU Trademark Regulation <span style="color:#9a9785">×</span> IP Enforcement Dir. (IPRED)
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score mid">sim 0.731</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">EU Trademark Regulation</p>
+      <p class="doc-id">32017R1001 · Art. 130</p>
+      <blockquote>EU trade mark courts shall have jurisdiction to prohibit the defendant from proceeding with the acts constituting infringement of the EU trade mark and shall take such measures in accordance with national law as are aimed at ensuring that this prohibition is complied with.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">IP Enforcement Directive (IPRED)</p>
+      <p class="doc-id">32004L0048 · Art. 9(1)</p>
+      <blockquote>Member States shall ensure that the judicial authorities may, at the request of the applicant, issue an interlocutory injunction intended to prevent any imminent infringement of an intellectual property right, or to forbid, on a provisional basis and subject to payment of a deposit, the continuation of the alleged infringements of that right.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">The EU Trademark Regulation creates a right and its specific court remedy in one instrument; IPRED creates a horizontal enforcement toolkit for all IP rights — including trademarks. BGE finds both converge on the same injunction mechanism, described in near-identical terms without cross-reference.</span>
+  </div>
+</article>
+
+<article class="pair" id="p20">
+  <header>
+    <div class="rank">20</div>
+    <h3>IP Enforcement Dir. <span style="color:#9a9785">×</span> Coty Germany (C-580/13)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.719</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">IP Enforcement Directive (IPRED)</p>
+      <p class="doc-id">32004L0048 · Art. 8(1)</p>
+      <blockquote>Member States shall ensure that, in the context of proceedings concerning an infringement of an intellectual property right, the competent judicial authorities may order that information on the origin and distribution networks of the goods or services which infringe an intellectual property right be provided by the infringer.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Coty Germany</p>
+      <p class="doc-id">62013CJ0580 · C-580/13</p>
+      <blockquote>Where goods have been subject to a customs procedure involving declaration for destruction and the declarant consented to their destruction, a customs authority cannot be required to disclose to a trademark holder the name and address of the consignee. The right of information under IPRED must be balanced against the right to protection of personal data.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">IPRED creates a broad right to know who is distributing infringing goods; Coty Germany defines where that right stops at the customs/personal-data boundary. The Directive says "shall order"; the case says "cannot be required" — the same disclosure question, opposite answers in different institutional contexts.</span>
+  </div>
+</article>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     GROUP E · Health Data, Clinical Research & Pharmacovigilance
+════════════════════════════════════════════════════════════════════ -->
+<div class="group-heading" id="gE">
+  <span class="g-num">Group E</span>
+  <h3>Health Data, Clinical Research &amp; Pharmacovigilance</h3>
+  <span class="g-count">Pairs 21–25</span>
+</div>
+
+<article class="pair" id="p21">
+  <header>
+    <div class="rank">21</div>
+    <h3>Clinical Trials Reg. <span style="color:#9a9785">×</span> Pharmacovigilance Dir.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score high">sim 0.823</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Clinical Trials Regulation</p>
+      <p class="doc-id">32014R0536 · Art. 42</p>
+      <blockquote>The sponsor shall report suspected unexpected serious adverse reactions to an investigational medicinal product to the EudraVigilance database electronically without undue delay and, in case of a fatal or life-threatening suspected unexpected serious adverse reaction, no later than seven days after the sponsor's first knowledge of the reaction.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Pharmacovigilance Dir. (amending Dir. 2001/83)</p>
+      <p class="doc-id">32010L0084 · Art. 107</p>
+      <blockquote>Marketing authorisation holders shall submit periodic safety update reports to the competent authorities containing all relevant information on the benefits and risks of medicinal products, including the results of all studies in which the potential benefit or the risk-benefit balance of the marketing authorisation might be affected by serious adverse reactions.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Clinical Trials requires adverse reaction reporting <em>before</em> market authorisation; Pharmacovigilance requires it <em>after</em>. BGE detects that both instruments describe the same regulatory activity — monitoring and reporting drug harms to EudraVigilance — and share nearly all their vocabulary except the stage of the medicine's lifecycle.</span>
+  </div>
+</article>
+
+<article class="pair" id="p22">
+  <header>
+    <div class="rank">22</div>
+    <h3>Clinical Trials Reg. <span style="color:#9a9785">×</span> Human Tissue Dir.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score mid">sim 0.747</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Clinical Trials Regulation</p>
+      <p class="doc-id">32014R0536 · Art. 29(1)</p>
+      <blockquote>A clinical trial may be conducted only if the subject or, where the subject is not able to give informed consent, their legally designated representative has given informed consent. Consent shall be given voluntarily after the subject has been informed of the nature, significance, implications and risks of the clinical trial.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Human Tissue and Cells Directive</p>
+      <p class="doc-id">32004L0023 · Art. 13(1)</p>
+      <blockquote>Member States shall take all necessary measures to ensure that donors, their relatives or any persons granting authorisation on behalf of the donor are provided with all relevant information, and that consent for the procurement of tissues or cells for human application has been obtained in accordance with the legal requirements in force in the Member State.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Both texts protect the human body — one during experimental treatment (living subjects), the other during tissue donation (often posthumous). BGE identifies both share an "informed consent + voluntary participation" architecture applied to human biological material, though they never cite each other.</span>
+  </div>
+</article>
+
+<article class="pair" id="p23">
+  <header>
+    <div class="rank">23</div>
+    <h3>Clinical Trials Reg. <span style="color:#9a9785">×</span> Hoffmann-La Roche v Autorità Garante (C-179/16)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.709</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Clinical Trials Regulation</p>
+      <p class="doc-id">32014R0536 · Art. 81(1)</p>
+      <blockquote>All data generated in the course of a clinical trial shall be recorded, handled, and stored in such a way that they can be accurately reported, interpreted and verified, while the confidentiality of records and the personal data of subjects remain protected in compliance with the applicable law on personal data protection.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Hoffmann-La Roche v Autorità Garante</p>
+      <p class="doc-id">62016CJ0179 · C-179/16</p>
+      <blockquote>Disseminating, to healthcare professionals and the general public, information on adverse reactions to a medicinal product that goes beyond what is contained in the summary of product characteristics constitutes a use that is not authorised; however, sharing objective and relevant scientific information between competitors may not automatically constitute a competition law infringement.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Clinical Trials mandates accurate data recording and its availability for verification; Hoffmann-La Roche tests the limits of sharing that scientific data with practitioners and competitors. BGE detects both texts negotiating the same tension: mandated openness vs. controlled use of medical trial information.</span>
+  </div>
+</article>
+
+<article class="pair" id="p24">
+  <header>
+    <div class="rank">24</div>
+    <h3>GDPR <span style="color:#9a9785">×</span> Clinical Trials Reg.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score high">sim 0.779</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">General Data Protection Regulation</p>
+      <p class="doc-id">32016R0679 · Art. 9(2)(a)</p>
+      <blockquote>Processing of special categories of personal data concerning health shall be prohibited unless the data subject has given explicit consent to the processing of those personal data for one or more specified purposes, except where Union or Member State law provide that the prohibition may not be lifted by the data subject.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Clinical Trials Regulation</p>
+      <p class="doc-id">32014R0536 · Art. 29(2)(b)</p>
+      <blockquote>Prior to giving informed consent, the subject shall be informed of the nature, significance, implications and risks of the clinical trial. The subject shall understand that participation is voluntary, that they may withdraw consent at any time, and that withdrawal will not result in any disadvantage.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">GDPR requires "explicit consent" for processing health data; Clinical Trials requires "informed consent" for using a person's body in research — the most sensitive form of health data processing possible. Both instruments converge on the same gate: no trial, no processing without freely given, specific agreement. Neither cites the other.</span>
+  </div>
+</article>
+
+<article class="pair" id="p25">
+  <header>
+    <div class="rank">25</div>
+    <h3>Prof. Qualifications Dir. <span style="color:#9a9785">×</span> Léger (C-528/13)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.694</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Professional Qualifications Directive</p>
+      <p class="doc-id">32005L0036 · Art. 13(1)</p>
+      <blockquote>If access to, or pursuit of, a regulated profession in a host Member State is contingent upon possession of specific professional qualifications, the competent authority of that Member State shall permit access to that profession on the same conditions as for nationals, on presentation of a European Professional Card or of a European Professional Card.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Léger</p>
+      <p class="doc-id">62013CJ0528 · C-528/13</p>
+      <blockquote>A permanent and absolute exclusion from blood donation of men who have had sexual relations with men is not justified unless it can be established that their deferral is based on up-to-date scientific evidence, is strictly necessary, and is proportionate to the risk of high-prevalence infections being transmitted through donated blood.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">PQD and Léger both regulate conditions for accessing health-related services — one for health professionals, the other for blood donors. BGE detects both apply the same proportionality test: access conditions must be non-discriminatory, evidence-based, and no broader than strictly necessary.</span>
+  </div>
+</article>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     GROUP F · Internal Security, Border Control & Asylum
+════════════════════════════════════════════════════════════════════ -->
+<div class="group-heading" id="gF">
+  <span class="g-num">Group F</span>
+  <h3>Internal Security, Border Control &amp; Asylum</h3>
+  <span class="g-count">Pairs 26–30</span>
+</div>
+
+<article class="pair" id="p26">
+  <header>
+    <div class="rank">26</div>
+    <h3>Prüm Decision <span style="color:#9a9785">×</span> Terrorism Information Exchange Decision
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score mid">sim 0.758</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Council Decision 2008/615/JHA (Prüm)</p>
+      <p class="doc-id">32008D0615 · Art. 4</p>
+      <blockquote>For the purpose of preventing and investigating criminal offences, Member States shall grant each other access to the data in national DNA analysis files, national dactyloscopic databases, and vehicle registration data. Automated comparison of DNA profiles shall be carried out if the reference data does not contain the personal data of the person concerned.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Council Decision 2005/671/JHA (Terrorism)</p>
+      <p class="doc-id">32005D0671 · Art. 2</p>
+      <blockquote>Each Member State shall take the necessary measures to ensure that at least Europol and Eurojust are supplied, without undue delay, with the relevant information held by it or by its law enforcement authorities concerning terrorist offences that have been committed or are being planned, including data relating to the persons and networks involved.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Prüm uses automated biometric database comparison; the Terrorism Decision uses intelligence sharing with Europol. BGE detects the same architecture — cross-border law enforcement data exchange without prior authorisation — deployed for general crime (Prüm) and terrorism (2005 Decision) using different vocabulary.</span>
+  </div>
+</article>
+
+<article class="pair" id="p27">
+  <header>
+    <div class="rank">27</div>
+    <h3>Schengen Borders Code <span style="color:#9a9785">×</span> VIS Regulation
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score high">sim 0.796</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Schengen Borders Code</p>
+      <p class="doc-id">32016R0399 · Art. 8(3)(a)(vi)</p>
+      <blockquote>During thorough checks of third-country nationals at external border crossing points, competent authorities shall verify that the third-country national is not subject to an alert entered in the Schengen Information System for the purpose of refusing entry. The check shall include verification against relevant databases.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Visa Information System Regulation</p>
+      <p class="doc-id">32008R0767 · Art. 21</p>
+      <blockquote>For the purpose of verifying the identity of the visa holder and the authenticity of the visa, the border guards shall carry out a verification in the VIS, searching with the visa sticker number combined with verification of fingerprints. For visas that do not include a fingerprint, the search shall be carried out with the visa sticker number only.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Both instruments regulate the same physical moment — a traveller presenting a visa at an EU external border crossing — but through different normative registers: SBC frames it as a border guard's check obligation; VIS frames it as a database query procedure. BGE detects they describe the same fingerprint-based border clearance.</span>
+  </div>
+</article>
+
+<article class="pair" id="p28">
+  <header>
+    <div class="rank">28</div>
+    <h3>Customs Information System Decision <span style="color:#9a9785">×</span> Prüm Decision
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score mid">sim 0.724</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Council Decision 2009/917/JHA (Customs IT)</p>
+      <p class="doc-id">32009D0917 · Art. 5</p>
+      <blockquote>The contracting parties shall ensure that any personal data entered in the Customs Information System may be used solely for the purpose for which it was entered. Transmission of such data to third countries or international organisations shall be prohibited unless the contracting party that entered the data has given its express authorisation.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Council Decision 2008/615/JHA (Prüm)</p>
+      <p class="doc-id">32008D0615 · Art. 35</p>
+      <blockquote>Personal data supplied under this Decision may be used by the Member State to which they are transmitted only for the purposes for which they were transmitted in accordance with the provisions of this Decision. Use for any other purpose shall be subject to the prior authorisation of the Member State transmitting the data.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Two entirely separate security databases — customs intelligence and biometric crime data — governed by identical purpose-limitation provisions. BGE finds the same clause ("may be used solely for the purpose for which it was entered / transmitted") reproduced in the Customs IT Decision and the Prüm Decision without either citing the other.</span>
+  </div>
+</article>
+
+<article class="pair" id="p29">
+  <header>
+    <div class="rank">29</div>
+    <h3>Schengen Borders Code <span style="color:#9a9785">×</span> Landespolizeidirektion Steiermark (C-368/20)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.741</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Schengen Borders Code</p>
+      <p class="doc-id">32016R0399 · Art. 25(1)</p>
+      <blockquote>Where there is a serious threat to public policy or internal security in a Member State, that Member State may exceptionally reintroduce border control at all or specific parts of its internal borders for a limited period of up to 30 days or for the foreseeable duration of the serious threat.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Landespolizeidirektion Steiermark</p>
+      <p class="doc-id">62020CJ0368 · C-368/20</p>
+      <blockquote>EU law precludes national legislation that allows the prolonged reintroduction of border controls at internal borders of the Schengen area for a duration exceeding the maximum periods set out in the Schengen Borders Code. A person refused entry on the basis of such unlawful border controls must have access to an effective judicial remedy.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">The Schengen Borders Code creates the exceptional reintroduction mechanism; C-368/20 enforces its time limits against states that treat the exception as permanent. BGE detects both texts revolving around the same concept — the outer limit of national discretion to restore internal borders — using "foreseeable duration" vs. "maximum periods."</span>
+  </div>
+</article>
+
+<article class="pair" id="p30">
+  <header>
+    <div class="rank">30</div>
+    <h3>Asylum Procedures Dir. <span style="color:#9a9785">×</span> Ibrahim (C-297/17)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.712</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Asylum Procedures Directive</p>
+      <p class="doc-id">32013L0032 · Art. 46(1)</p>
+      <blockquote>Member States shall ensure that applicants have the right to an effective remedy before a court or tribunal against rejection of their application, failure to examine an application, a decision not to conduct an examination of a subsequent application, or a decision to return.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Ibrahim and Others</p>
+      <p class="doc-id">62017CJ0297 · C-297/17</p>
+      <blockquote>A Member State may reject as inadmissible an application for international protection made by a person who has already obtained subsidiary protection in another Member State, provided the living conditions in that state do not expose the applicant to a serious risk of inhuman or degrading treatment. The applicant must have access to an effective remedy to challenge that finding.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">The Directive guarantees an effective remedy against rejection; Ibrahim defines what "effective" means when the rejection relies on another state's protection. BGE finds both texts grappling with access to justice as the irreducible minimum in the asylum procedure — from opposite sides of the inadmissibility decision.</span>
+  </div>
+</article>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     GROUP G · Consumer Rights in the Digital Economy
+════════════════════════════════════════════════════════════════════ -->
+<div class="group-heading" id="gG">
+  <span class="g-num">Group G</span>
+  <h3>Consumer Rights in the Digital Economy</h3>
+  <span class="g-count">Pairs 31–35</span>
+</div>
+
+<article class="pair" id="p31">
+  <header>
+    <div class="rank">31</div>
+    <h3>Consumer Rights Dir. <span style="color:#9a9785">×</span> VKI v Amazon (C-191/15)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score high">sim 0.763</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Consumer Rights Directive</p>
+      <p class="doc-id">32011L0083 · Art. 25</p>
+      <blockquote>If a contract term excludes or restricts the application of the rights conferred on consumers by this Directive, the term shall not be binding on the consumer. The rights conferred by this Directive shall apply notwithstanding any contractual term that purports to waive or restrict those rights.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Verein für Konsumenteninformation v Amazon EU</p>
+      <p class="doc-id">62015CJ0191 · C-191/15</p>
+      <blockquote>A choice-of-law clause in standard terms and conditions designating the law of the Member State in which the seller is established is unfair in so far as it leads the consumer to believe that only the law of that Member State applies, without informing the consumer that they also enjoy the protection of the mandatory provisions of the law of their country of habitual residence.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Consumer Rights Art. 25 prevents contractual terms from waiving consumer protection; VKI v Amazon prevents choice-of-law clauses from achieving the same waiver indirectly. BGE detects both converge on "circumvention via contract" — the platform tries to move the applicable law rather than exclude rights explicitly.</span>
+  </div>
+</article>
+
+<article class="pair" id="p32">
+  <header>
+    <div class="rank">32</div>
+    <h3>Consumer Credit Dir. <span style="color:#9a9785">×</span> CA Consumer Finance (C-449/13)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score high">sim 0.776</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Consumer Credit Directive</p>
+      <p class="doc-id">32008L0048 · Art. 8(1)</p>
+      <blockquote>Before the conclusion of the credit agreement, the creditor shall assess the consumer's creditworthiness on the basis of sufficient information, where appropriate obtained from the consumer and, where necessary, on the basis of a consultation of the relevant database.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">CA Consumer Finance</p>
+      <p class="doc-id">62013CJ0449 · C-449/13</p>
+      <blockquote>A standard pre-contractual clause whereby the consumer certifies that their creditworthiness has been assessed and that they are not over-indebted cannot, by itself, discharge the creditor from the obligation to assess creditworthiness. The creditor bears the burden of proving that a genuine assessment was conducted on the basis of sufficient information.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">The Directive mandates creditworthiness assessment; the case rules that a pre-printed consumer acknowledgement cannot substitute for it. BGE finds both texts circling the same concept — the non-delegability of the lender's due-diligence obligation — from the legislative and judicial sides.</span>
+  </div>
+</article>
+
+<article class="pair" id="p33">
+  <header>
+    <div class="rank">33</div>
+    <h3>Consumer Credit Dir. <span style="color:#9a9785">×</span> Consumer Rights Dir.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score high">sim 0.808</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Consumer Credit Directive</p>
+      <p class="doc-id">32008L0048 · Art. 14(1)</p>
+      <blockquote>The consumer shall have the right to withdraw from the credit agreement within a period of 14 calendar days without giving any reason. That withdrawal period shall begin from the day of the conclusion of the credit agreement, or from the day on which the consumer receives the contractual terms and conditions, if that is later.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Consumer Rights Directive</p>
+      <p class="doc-id">32011L0083 · Art. 9(1)</p>
+      <blockquote>The consumer shall have a period of 14 days to withdraw from a distance or an off-premises contract without giving any reason, and without incurring any costs other than those provided for in Article 13(2) and Article 14. That withdrawal period shall expire after 14 days from the day on which the consumer acquires physical possession of the goods.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Both provisions grant a 14-day no-reason withdrawal right — one for credit agreements (2008), one for off-premises and distance contracts (2011). BGE registers near-identical legislative DNA: identical period, identical "without giving any reason" formula, different trigger event (credit conclusion vs. physical possession). Neither instrument cross-references the other.</span>
+  </div>
+</article>
+
+<article class="pair" id="p34">
+  <header>
+    <div class="rank">34</div>
+    <h3>Consumer Credit Dir. <span style="color:#9a9785">×</span> SC Volksbank Romania (C-602/10)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.737</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Consumer Credit Directive</p>
+      <p class="doc-id">32008L0048 · Art. 22(1)</p>
+      <blockquote>In so far as this Directive contains harmonised provisions, Member States may not maintain or introduce in their national law provisions diverging from those laid down in this Directive. This Directive shall be without prejudice to Member States' rules on the legal consequences of defective credit agreements.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">SC Volksbank România</p>
+      <p class="doc-id">62010CJ0602 · C-602/10</p>
+      <blockquote>Directive 2008/48 is a maximum harmonisation Directive that precludes the application of national consumer protection rules which impose more stringent obligations on the creditor than those provided for in the Directive, even if those national rules were adopted to ensure a higher level of consumer protection.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Art. 22 of the Consumer Credit Directive states the maximum harmonisation rule; SC Volksbank operationalizes it against national courts tempted to add extra protections. BGE finds both texts grappling with the same legal ceiling — when an EU directive exhausts the regulatory space, member states cannot legislate above it.</span>
+  </div>
+</article>
+
+<article class="pair" id="p35">
+  <header>
+    <div class="rank">35</div>
+    <h3>e-Commerce Dir. <span style="color:#9a9785">×</span> Pinckney (C-170/12)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.698</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">e-Commerce Directive</p>
+      <p class="doc-id">32000L0031 · Art. 3(1)</p>
+      <blockquote>Each Member State shall ensure that the information society services provided by a service provider established on its territory comply with the national provisions applicable in that Member State which fall within the coordinated field. The country-of-origin principle means that a provider shall comply only with the law of its establishment.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Pinckney</p>
+      <p class="doc-id">62012CJ0170 · C-170/12</p>
+      <blockquote>A court in the Member State where the copyright is protected and the damage has materialised has jurisdiction to rule on the harm suffered in that Member State, even where the online content was made accessible from a server in another Member State. The court's jurisdiction is limited to the damage sustained on its own territory.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">e-Commerce Art. 3 establishes the country-of-origin principle for online services: the provider's home law governs. Pinckney holds that for copyright damage, the country-of-harm court also has jurisdiction. BGE detects the fundamental tension — one rule says look to the source, the other says look to where harm lands — converging on the same website and the same infringing content.</span>
+  </div>
+</article>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     GROUP H · Product Standards, Environmental Governance & Public Data
+════════════════════════════════════════════════════════════════════ -->
+<div class="group-heading" id="gH">
+  <span class="g-num">Group H</span>
+  <h3>Product Standards, Environmental Governance &amp; Public Data</h3>
+  <span class="g-count">Pairs 36–40</span>
+</div>
+
+<article class="pair" id="p36">
+  <header>
+    <div class="rank">36</div>
+    <h3>Energy Labelling Reg. <span style="color:#9a9785">×</span> Tobacco Products Dir.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score mid">sim 0.743</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Energy Labelling Regulation</p>
+      <p class="doc-id">32017R1369 · Art. 3(1)</p>
+      <blockquote>Suppliers shall ensure that products placed or made available on the market within the Union are provided with an accurate, reliable and legible label and a product data sheet in the format defined by the applicable delegated act. Labels shall include an energy efficiency class rating on a scale from A to G.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Tobacco Products Directive</p>
+      <p class="doc-id">32014L0040 · Art. 10(1)</p>
+      <blockquote>Each unit packet of cigarettes and any outside packaging shall carry combined health warnings, each consisting of a text warning and a corresponding colour photograph. The combined health warning shall cover 65% of the external front and back surface of the unit packet and any outside packaging.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Both instruments impose mandatory standardised labels on consumer products — one to enable comparison (A-G energy rating), the other to deter use (65% health warning). BGE identifies the shared legislative architecture: define a standard label format, mandate it on all packaging, specify minimum coverage. The policy goals are opposite; the regulatory mechanism is identical.</span>
+  </div>
+</article>
+
+<article class="pair" id="p37">
+  <header>
+    <div class="rank">37</div>
+    <h3>Energy Labelling Reg. <span style="color:#9a9785">×</span> Philip Morris Brands (C-547/14)
+      <span class="badge lc">Law × Case</span></h3>
+    <div class="score mid">sim 0.717</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Energy Labelling Regulation</p>
+      <p class="doc-id">32017R1369 · Art. 7</p>
+      <blockquote>Suppliers shall ensure that all advertisements for specific models of energy-related products contain a reference to the energy efficiency class of the product. Where the price or technical parameters of the product are referred to in any advertisement, the energy efficiency class shall be prominently displayed.</blockquote>
+    </div>
+    <div class="side cs">
+      <span class="tag">Case · Ruling</span>
+      <p class="doc-name">Philip Morris Brands</p>
+      <p class="doc-id">62014CJ0547 · C-547/14</p>
+      <blockquote>The obligation imposed by the Tobacco Products Directive to display standardised health warnings covering 65% of the surface of tobacco packaging is proportionate to the aim of ensuring a high level of health protection. The restriction on the use of brand names, colours and other promotional elements on tobacco packaging does not violate property rights or freedom of expression.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">Energy Labelling mandates that standardised comparative information appear "prominently" in all advertisements; Philip Morris upholds the constitutionality of mandating that standardised health warnings dominate product packaging. BGE finds both texts defending the same regulatory principle — mandatory standardised presentation overrides commercial presentation — in different markets.</span>
+  </div>
+</article>
+
+<article class="pair" id="p38">
+  <header>
+    <div class="rank">38</div>
+    <h3>Common Fisheries Policy Reg. <span style="color:#9a9785">×</span> Rural Development Reg.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score mid">sim 0.726</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Common Fisheries Policy Regulation</p>
+      <p class="doc-id">32013R1380 · Art. 9(1)</p>
+      <blockquote>Member States shall establish multiannual plans for all fisheries of species that are harvested commercially, setting conservation measures to restore and maintain populations of harvested species above biomass levels capable of producing maximum sustainable yield. Plans shall specify the timeframe for achieving those targets.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Rural Development Regulation (EAFRD)</p>
+      <p class="doc-id">32013R1305 · Art. 8(1)</p>
+      <blockquote>Support for rural development shall be programmed through rural development programmes. Each Member State shall submit a national rural development programme covering the entire period from 1 January 2014 to 31 December 2020, reflecting the priorities identified in the Partnership Agreement.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">CFP (sea) and EAFRD (land) were both adopted in December 2013 as twin pillars of the EU's natural resource management. BGE finds both deploying the same multi-annual programming framework — member-state plans, Commission approval, target-setting over the same 2014-2020 horizon — for oceans and farmland without ever cross-referencing.</span>
+  </div>
+</article>
+
+<article class="pair" id="p39">
+  <header>
+    <div class="rank">39</div>
+    <h3>INSPIRE Dir. <span style="color:#9a9785">×</span> European Statistics Reg.
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score mid">sim 0.733</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">INSPIRE Directive</p>
+      <p class="doc-id">32007L0002 · Art. 11(1)</p>
+      <blockquote>Member States shall establish and operate a network of services for the spatial data sets and services to which metadata has been created. The network shall include a discovery service, a view service, a download service, a transformation service, and a service allowing spatial data services to be invoked.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">European Statistics Regulation</p>
+      <p class="doc-id">32009R0223 · Art. 17(1)</p>
+      <blockquote>National statistical institutes and other national authorities shall cooperate with the Commission to ensure the provision of European statistics and to meet users' needs. National statistical authorities shall transmit to the Commission the statistics in the form and according to the standard established by the Commission.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">INSPIRE mandates an interoperable network for geographic public data (spatial); the Statistics Regulation mandates a comparable harmonised transmission infrastructure for demographic and economic data. BGE detects the same federated governance model: member states maintain national datasets; the EU prescribes the interoperability standard; cross-border discovery and access are mandatory.</span>
+  </div>
+</article>
+
+<article class="pair" id="p40">
+  <header>
+    <div class="rank">40</div>
+    <h3>VIS Regulation <span style="color:#9a9785">×</span> Customs Information System Decision
+      <span class="badge ll">Law × Law</span></h3>
+    <div class="score high">sim 0.761</div>
+  </header>
+  <div class="body">
+    <div class="side lw">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Visa Information System Regulation</p>
+      <p class="doc-id">32008R0767 · Art. 28(1)</p>
+      <blockquote>Data entered in the VIS shall be processed solely for the purposes of verifying the identity of visa applicants and holders, examining visa applications, and preventing threats to the internal security of Member States. Data shall not be processed for any purpose incompatible with those purposes.</blockquote>
+    </div>
+    <div class="side lw2">
+      <span class="tag">Law · Provision</span>
+      <p class="doc-name">Council Decision 2009/917/JHA (Customs IT)</p>
+      <p class="doc-id">32009D0917 · Art. 5(1)</p>
+      <blockquote>Any personal data entered in the Customs Information System shall be used solely for the purposes for which they were entered. Use for any other purpose shall be prohibited except with the prior authorisation of the contracting party that entered the data and subject to the conditions it lays down.</blockquote>
+    </div>
+  </div>
+  <div class="insight">
+    <span class="i-label">Bridge</span>
+    <span class="i-text">VIS governs biometric visa data; CIS governs customs intelligence data — two entirely different border management systems. BGE finds both share word-for-word purpose-limitation provisions: data "shall be processed/used solely for the purposes for which they were entered." The same data-governance principle was written into two silos without being cross-referenced.</span>
+  </div>
+</article>
+
+  <footer class="meta">
+    Model: BAAI/bge-m3 (BGE-M3) · Chunk-level cosine similarity · Floor ≥ 0.60<br>
+    Source: EU Legal Corpus · 422 law nodes × 410 case nodes · Explicit citation pairs excluded<br>
+    40 pairs across 8 thematic groups · Workshop edition · v2 · May 2026
+  </footer>
+</main>
+</div>
+
+<script>
+/* ── Navigation: collect all lists ── */
+const allLis = document.querySelectorAll('aside ol li');
+
+allLis.forEach(li => {
+  li.addEventListener('click', () => {
+    const t = document.getElementById(li.dataset.target);
+    if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    allLis.forEach(x => x.classList.remove('active'));
+    li.classList.add('active');
+  });
+});
+
+/* ── Highlight active pair on scroll ── */
+const pairs = Array.from(document.querySelectorAll('.pair'));
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const id = e.target.id;
+      allLis.forEach(li => {
+        if (li.dataset.target === id) li.classList.add('active');
+        else li.classList.remove('active');
+      });
+    }
+  });
+}, { rootMargin: '-40% 0px -55% 0px', threshold: 0 });
+pairs.forEach(p => io.observe(p));
+</script>
+</body></html>
